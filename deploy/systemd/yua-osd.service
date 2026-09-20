@@ -1,0 +1,28 @@
+[Unit]
+Description=YUA OS MANAGER — daemon (yua-osd) modo sistema
+Documentation=https://github.com/yuaberry/yua-os-manager
+Requires=yua-osd.socket
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/yua-osd --system
+User=root
+Group=root
+# hardening: mínimo necessário para Fase 1 (leitura). A Fase 5 (UKI/ESP)
+# adicionará ReadWritePaths=/boot/efi com justificativa em SECURITY.md.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+ReadWritePaths=/var/lib/yua-os-manager
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=yua-osd
+
+[Install]
+WantedBy=multi-user.target

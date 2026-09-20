@@ -1,0 +1,24 @@
+# Rust
+target/
+**/*.rs.bk
+
+# Node / frontend
+node_modules/
+dist/
+apps/desktop/dist/
+
+# Tauri build artifacts
+apps/desktop/src-tauri/gen/
+
+# Ambientes
+.env
+.env.*
+
+# Logs e caches locais
+*.log
+.cache/
+
+# Editor
+.vscode/
+.idea/
+*.swp

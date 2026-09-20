@@ -1,0 +1,385 @@
+//! `yua doctor` — diagnóstico completo do ambiente com instruções EXATAS de
+//! correção. Cada verificação roda com spinner e resultado honesto: o que
+//! falta é reportado com código (YUA-DEP-NNN) e o comando apt correspondente.
+
+use std::path::PathBuf;
+
+use yua_core::boot::efi::read_efi_state;
+use yua_core::boot::esp::read_esp;
+use yua_core::capability::probe_capabilities;
+use yua_core::disk::identity::DiskIdentity;
+use yua_core::error::YuaError;
+use yua_core::executor::{disk_of_partition, host_root_disk, Executor};
+use yua_core::hw::system::probe_system_info;
+use yua_core::ipc::protocol::{DEFAULT_SYSTEM_SOCKET, METHOD_DAEMON_INFO};
+use yua_core::ipc::{dev_socket_default, YuaClient};
+use yua_core::Availability;
+
+use crate::ui::{self, paint};
+
+/// Comando EXATO para compilar o app desktop (Tauri 2 no Ubuntu 24.04/Mint 22).
+pub const APT_BUILD_DEPS: &str = "sudo apt install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+libsoup-3.0-dev librsvg2-dev libayatana-appindicator3-dev libssl-dev libxdo-dev file pkg-config";
+/// Dependências de runtime recomendadas (saúde de discos, Windows, QEMU).
+pub const APT_RUNTIME_DEPS: &str = "sudo apt install -y smartmontools nvme-cli xorriso wimtools \
+mtools qemu-system-x86 qemu-utils ovmf memtest86+ testdisk";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Status {
+    Ok,
+    Warn,
+    Fail,
+}
+
+struct Finding {
+    status: Status,
+    name: String,
+    detail: String,
+}
+
+impl Finding {
+    fn tag(&self, color: bool) -> String {
+        match self.status {
+            Status::Ok => ui::tag_ok(color),
+            Status::Warn => ui::tag_warn(color),
+            Status::Fail => ui::tag_fail(color),
+        }
+    }
+}
+
+fn check<F>(name: &str, color: bool, f: F) -> Finding
+where
+    F: FnOnce() -> Finding,
+{
+    let sp = ui::Spinner::start(name, color);
+    let finding = f();
+    sp.finish();
+    println!(
+        "  {} {} {} {}",
+        finding.tag(color),
+        paint(name, "bold", color),
+        paint("·", "dim", color),
+        finding.detail
+    );
+    finding
+}
+
+fn daemon_state() -> Option<(String, serde_json::Value)> {
+    let paths: Vec<PathBuf> = vec![dev_socket_default(), PathBuf::from(DEFAULT_SYSTEM_SOCKET)];
+    for p in paths {
+        if let Ok(mut client) = YuaClient::connect(&p) {
+            if let Ok(info) = client.call(METHOD_DAEMON_INFO, serde_json::json!({})) {
+                return Some((p.display().to_string(), info));
+            }
+        }
+    }
+    None
+}
+
+pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
+    let exec = Executor::default();
+    let caps = probe_capabilities();
+    let sys = probe_system_info();
+
+    let mut findings: Vec<Finding> = Vec::new();
+
+    ui::banner(color);
+    println!("{}", paint("Diagnóstico do ambiente", "bold", color));
+    println!();
+
+    // 1 — ferramentas essenciais
+    findings.push(check("ferramentas essenciais (core)", color, || {
+        let (found, total) = *caps.groups.get("core").unwrap_or(&(0, 0));
+        let missing: Vec<String> = caps
+            .tools
+            .iter()
+            .filter(|t| t.group == "core" && !t.found)
+            .map(|t| format!("{} ({})", t.name, t.apt_package))
+            .collect();
+        if missing.is_empty() {
+            Finding {
+                status: Status::Ok,
+                name: "core".into(),
+                detail: format!("{found}/{total} presentes — particionamento, formatação, UKI e boot cobertos"),
+            }
+        } else {
+            Finding {
+                status: Status::Fail,
+                name: "core".into(),
+                detail: format!("faltando: {}", missing.join(", ")),
+            }
+        }
+    }));
+
+    // 2 — autorização
+    findings.push(check("autorização (polkit)", color, || {
+        let have = ["pkexec", "pkcheck"].iter().all(|t| caps.tools.iter().any(|x| x.name == *t && x.found));
+        let mok = caps.tools.iter().any(|x| x.name == "mokutil" && x.found);
+        if have && mok {
+            Finding {
+                status: Status::Ok,
+                name: "auth".into(),
+                detail: "pkexec, pkcheck e mokutil presentes".into(),
+            }
+        } else if have {
+            Finding {
+                status: Status::Warn,
+                name: "auth".into(),
+                detail: "mokutil ausente (pacote mokutil) — só afeta estados MOK/Secure Boot".into(),
+            }
+        } else {
+            Finding {
+                status: Status::Fail,
+                name: "auth".into(),
+                detail: "policykit ausente — o daemon system não poderá autenticar".into(),
+            }
+        }
+    }));
+
+    // 3 — UEFI + Secure Boot
+    findings.push(check("UEFI + Secure Boot", color, || {
+        if !sys.is_uefi {
+            return Finding {
+                status: Status::Fail,
+                name: "uefi".into(),
+                detail: "máquina não boota em UEFI — plataforma exige UEFI nativo".into(),
+            };
+        }
+        match sys.secure_boot.enabled {
+            Some(true) => Finding {
+                status: Status::Warn,
+                name: "uefi".into(),
+                detail: "Secure Boot HABILITADO — drivers/UKIs precisarão ser assinados (mok)".into(),
+            },
+            Some(false) => Finding {
+                status: Status::Ok,
+                name: "uefi".into(),
+                detail: "UEFI nativo · Secure Boot desabilitado — UKIs de teste bootam direto".into(),
+            },
+            None => Finding {
+                status: Status::Warn,
+                name: "uefi".into(),
+                detail: "UEFI nativo · valor de Secure Boot ilegível (YUA-UEFI-001)".into(),
+            },
+        }
+    }));
+
+    // 4 — ESP
+    let esp = read_esp();
+    findings.push(check("ESP (/boot/efi)", color, || {
+        if !esp.mounted {
+            return Finding {
+                status: Status::Fail,
+                name: "esp".into(),
+                detail: "não montada — YUA-BOOT-002: instalação UEFI indisponível".into(),
+            };
+        }
+        if esp.free_bytes < 32 * 1024 * 1024 {
+            Finding {
+                status: Status::Warn,
+                name: "esp".into(),
+                detail: format!(
+                    "montada em {} mas só {} livres — risco de estourar com UKIs",
+                    esp.device.clone().unwrap_or_default(),
+                    ui::fmt_bytes(esp.free_bytes)
+                ),
+            }
+        } else {
+            Finding {
+                status: Status::Ok,
+                name: "esp".into(),
+                detail: format!(
+                    "{} · {} livres de {} · escrita {}",
+                    esp.device.clone().unwrap_or_default(),
+                    ui::fmt_bytes(esp.free_bytes),
+                    ui::fmt_bytes(esp.total_bytes),
+                    if esp.restricted_permissions {
+                        "via daemon (umask=0077)"
+                    } else {
+                        "direta"
+                    }
+                ),
+            }
+        }
+    }));
+
+    // 5 — disco do sistema + identidade real
+    findings.push(check("identidade do disco do sistema", color, || {
+        let Some(root) = host_root_disk() else {
+            return Finding {
+                status: Status::Fail,
+                name: "hostdisk".into(),
+                detail: "não consegui determinar o disco do rootfs (/proc/mounts)".into(),
+            };
+        };
+        let disk = disk_of_partition(&root).unwrap_or_else(|| root.clone());
+        match DiskIdentity::probe(&exec, &disk) {
+            Ok(id) => {
+                let serial = id.serial.unwrap_or_default();
+                Finding {
+                    status: Status::Ok,
+                    name: "hostdisk".into(),
+                    detail: format!(
+                        "{} em {} · serial {} — guard de disco vivo armado (YUA-DISK-010)",
+                        disk, root, serial
+                    ),
+                }
+            }
+            Err(e) => Finding {
+                status: Status::Warn,
+                name: "hostdisk".into(),
+                detail: format!("sondagem falhou: {} ({})", e.code, e.message),
+            },
+        }
+    }));
+
+    // 6 — entradas UEFI
+    findings.push(check("entradas de boot UEFI", color, || {
+        match read_efi_state(&exec) {
+            Ok(state) => Finding {
+                status: Status::Ok,
+                name: "efi".into(),
+                detail: format!(
+                    "{} entradas legíveis · boot atual {} · leitura sem root OK",
+                    state.entries.len(),
+                    state.boot_current.unwrap_or_else(|| "—".into())
+                ),
+            },
+            Err(e) => Finding {
+                status: Status::Warn,
+                name: "efi".into(),
+                detail: format!("efibootmgr falhou: {} — {}", e.code, e.message),
+            },
+        }
+    }));
+
+    // 7 — daemon
+    let daemon = daemon_state();
+    findings.push(check("daemon yua-osd", color, || {
+        match &daemon {
+            Some((sock, info)) => Finding {
+                status: Status::Ok,
+                name: "daemon".into(),
+                detail: format!(
+                    "v{} · modo {} · {}",
+                    info["version"], info["mode"], sock
+                ),
+            },
+            None => Finding {
+                status: Status::Warn,
+                name: "daemon".into(),
+                detail: "não está rodando — leitura direta funciona; destructive exigirá modo system".into(),
+            },
+        }
+    }));
+
+    // 8 — virtualização
+    findings.push(check("virtualização (testes futuros)", color, || {
+        let qemu = caps.tools.iter().filter(|t| t.name.starts_with("qemu") && t.found).count();
+        match (&caps.kvm, &caps.ovmf) {
+            (Availability::Available, Availability::Available) if qemu == 2 => Finding {
+                status: Status::Ok,
+                name: "virt".into(),
+                detail: "KVM + OVMF + QEMU prontos para testes destrutivos em VM".into(),
+            },
+            _ => Finding {
+                status: Status::Warn,
+                name: "virt".into(),
+                detail: "incompleto — testes destrutivos da Fase 9 exigem (veja comando abaixo)".into(),
+            },
+        }
+    }));
+
+    // 9 — saúde SMART
+    findings.push(check("saúde de disco (SMART)", color, || {
+        if caps.tools.iter().any(|t| t.name == "smartctl" && t.found) {
+            Finding {
+                status: Status::Ok,
+                name: "smart".into(),
+                detail: "smartctl instalado (detalhes completos via daemon system)".into(),
+            }
+        } else {
+            Finding {
+                status: Status::Warn,
+                name: "smart".into(),
+                detail: "smartctl ausente — YUA-DEP-005: `yua disks` reporta SMART como indisponível (honesto)".into(),
+            }
+        }
+    }));
+
+    // 10 — headers de build do app desktop
+    findings.push(check("headers de build do app desktop", color, || {
+        if caps.tauri_build_ready {
+            Finding {
+                status: Status::Ok,
+                name: "tauri".into(),
+                detail: "webkit2gtk-4.1/gtk3/soup3 encontrados — `cargo build` do app compila".into(),
+            }
+        } else {
+            Finding {
+                status: Status::Warn,
+                name: "tauri".into(),
+                detail: "headers webkit2gtk-4.1-dev ausentes — app desktop não compila ATÉ instalar (comando abaixo)".into(),
+            }
+        }
+    }));
+
+    // ---- resumo ----
+    let (ok, warn, fail) = findings.iter().fold((0, 0, 0), |(o, w, f), x| match x.status {
+        Status::Ok => (o + 1, w, f),
+        Status::Warn => (o, w + 1, f),
+        Status::Fail => (o, w, f + 1),
+    });
+    println!();
+    println!(
+        "  {} {} em ordem · {} {} · {} {} críticos",
+        ui::tag_ok(color),
+        paint(&ok.to_string(), "green", color),
+        ui::tag_warn(color),
+        paint(&warn.to_string(), "yellow", color),
+        ui::tag_fail(color),
+        paint(&fail.to_string(), "red", color)
+    );
+
+    // ---- próximos passos com comandos exatos ----
+    let mut next: Vec<String> = Vec::new();
+    if !caps.tauri_build_ready {
+        next.push(format!("Compilar o app desktop:\n      {APT_BUILD_DEPS}"));
+    }
+    let missing_runtime = caps.tools.iter().any(|t| !t.found && t.group != "core");
+    if missing_runtime {
+        next.push(format!(
+            "Ferramentas recomendadas (SMART, Windows, QEMU):\n      {APT_RUNTIME_DEPS}"
+        ));
+    }
+    next.push(String::from(
+        "Tudo acima de uma vez: bash scripts/bootstrap-linux.sh (idempotente, com --check)",
+    ));
+    if daemon.is_none() {
+        next.push(String::from(
+            "Subir o daemon dev (somente leitura): yua daemon run",
+        ));
+    }
+    if !next.is_empty() {
+        println!();
+        println!("  {}", paint("PRÓXIMOS PASSOS", "bold", color));
+        for (i, n) in next.iter().enumerate() {
+            println!("  {}. {n}", i + 1);
+        }
+    }
+    println!();
+
+    if json {
+        let out = serde_json::json!({
+            "ok": true,
+            "summary": {"ok": ok, "warn": warn, "fail": fail},
+            "capabilities": caps,
+            "system": sys,
+            "esp": esp,
+            "daemon": daemon.map(|(_, info)| info),
+            "next_steps": next,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+    }
+    Ok(())
+}

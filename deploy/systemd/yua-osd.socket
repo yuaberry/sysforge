@@ -1,0 +1,12 @@
+[Unit]
+Description=YUA OS MANAGER — daemon socket (yua-osd)
+Documentation=https://github.com/yuaberry/yua-os-manager
+
+[Socket]
+ListenStream=/run/yua-osd.sock
+SocketMode=0666
+# Qualquer usuário local pode conectar; a AUTORIZIZAÇÃO é por método,
+# dentro do daemon (SO_PEERCRED + polkit — ver com.yua.osd.policy).
+
+[Install]
+WantedBy=sockets.target

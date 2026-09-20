@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  YUA OS MANAGER — ações polkit do daemon yua-osd.
+
+  Fase 1 (atual): o daemon só publica métodos READ-ONLY. Estas ações
+  entram em uso na Fase 2, quando pkcheck passar a mediar cada método
+  pela classe de risco do executor (com.yua.osd.*).
+-->
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit-1/policyconfig.dtd">
+<policyconfig>
+
+  <vendor>Yua Devs</vendor>
+  <vendor_url>https://github.com/yuaberry/yua-os-manager</vendor_url>
+
+  <action id="com.yua.osd.readonly">
+    <description>Consultar hardware e estado do sistema (YUA OS MANAGER)</description>
+    <description xml:lang="pt-br">Consultar hardware e estado do sistema (YUA OS MANAGER)</description>
+    <message>Autenticar para consultar o estado do sistema via yua-osd</message>
+    <defaults>
+      <allow_any>yes</allow_any>
+      <allow_inactive>yes</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.yua.osd.lowrisk">
+    <description>Operações reversíveis de boot/montagem (YUA OS MANAGER)</description>
+    <description xml:lang="pt-br">Operações reversíveis de boot/montagem (YUA OS MANAGER)</description>
+    <message>Autenticar para operações de baixo risco (ex.: BootNext one-shot)</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="com.yua.osd.destructive">
+    <description>Operações destrutivas de disco (YUA OS MANAGER)</description>
+    <description xml:lang="pt-br">Operações destrutivas de disco (YUA OS MANAGER)</description>
+    <message>Autenticar como administrador para operações IRREVERSÍVEIS de disco</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+
+</policyconfig>
