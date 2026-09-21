@@ -107,8 +107,19 @@ impl CommandSpec {
         let mut c = Command::new(&self.program);
         c.args(&self.args);
         // Ambiente determinístico: parsing estável independente do locale.
+        // PATH explícito com fallback: processos nascidos de pkexec/systemd
+        // podem vir SEM PATH (bug real encontrado em teste: pkcheck → 127).
+        let safe_path = {
+            let inherited = std::env::var("PATH").unwrap_or_default();
+            if inherited.trim().is_empty() {
+                "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string()
+            } else {
+                inherited
+            }
+        };
         c.env("LC_ALL", "C");
         c.env("LANG", "C");
+        c.env("PATH", safe_path);
         for (k, v) in &self.env {
             c.env(k, v);
         }

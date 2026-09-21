@@ -171,27 +171,40 @@ pub fn run(json: bool, color: bool, opts: WinstallOpts) -> Result<(), YuaError> 
     }
 
     // 3. BootNext one-shot para a entrada USB (via daemon system + polkit)
-    let state = read_efi_state(&ex)?;
-    match state.usb_entry_id() {
-        Some(usb_id) => {
-            let sock = ensure_system_daemon(color)?;
-            let mut client = YuaClient::connect(&sock)?;
-            let r = client.call(METHOD_BOOT_SET_NEXT, json!({"entry_id": usb_id, "confirm": true}))?;
-            println!(
-                "  {} BootNext → {} ({}) — one-shot, BootOrder intacto",
-                ui::tag_ok(color),
-                usb_id,
-                r["entry"]["name"].as_str().unwrap_or("?")
-            );
-            if let Some(snap) = r["snapshot_path"].as_str() {
-                println!("      {} snapshot prévio: {}", paint("·", "dim", color), snap);
+    //    GUARD: só arma se houver pendrive conectado — armar "USB" sem mídia
+    //    é armadilha para o próximo boot do usuário.
+    if checklist.media.is_empty() {
+        println!(
+            "  {} BootNext NÃO armado: nenhum pendrive conectado (arpar sem mídia seria armadilha no próximo boot)",
+            ui::tag_warn(color)
+        );
+        println!(
+            "      {} conecte o pendrive Ventoy e rode `yua winstall --apply` de novo",
+            paint("→", "cyan", color)
+        );
+    } else {
+        let state = read_efi_state(&ex)?;
+        match state.usb_entry_id() {
+            Some(usb_id) => {
+                let sock = ensure_system_daemon(color)?;
+                let mut client = YuaClient::connect(&sock)?;
+                let r = client.call(METHOD_BOOT_SET_NEXT, json!({"entry_id": usb_id, "confirm": true}))?;
+                println!(
+                    "  {} BootNext → {} ({}) — one-shot, BootOrder intacto",
+                    ui::tag_ok(color),
+                    usb_id,
+                    r["entry"]["name"].as_str().unwrap_or("?")
+                );
+                if let Some(snap) = r["snapshot_path"].as_str() {
+                    println!("      {} snapshot prévio: {}", paint("·", "dim", color), snap);
+                }
             }
-        }
-        None => {
-            println!(
-                "  {} sem entrada USB dedicada no firmware — no boot, use o menu F12/F9 e escolha o pendrive",
-                ui::tag_warn(color)
-            );
+            None => {
+                println!(
+                    "  {} sem entrada USB dedicada no firmware — no boot, use o menu F12/F9 e escolha o pendrive",
+                    ui::tag_warn(color)
+                );
+            }
         }
     }
 

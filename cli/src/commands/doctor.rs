@@ -33,7 +33,6 @@ enum Status {
 
 struct Finding {
     status: Status,
-    name: String,
     detail: String,
 }
 
@@ -99,13 +98,11 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
         if missing.is_empty() {
             Finding {
                 status: Status::Ok,
-                name: "core".into(),
                 detail: format!("{found}/{total} presentes — particionamento, formatação, UKI e boot cobertos"),
             }
         } else {
             Finding {
                 status: Status::Fail,
-                name: "core".into(),
                 detail: format!("faltando: {}", missing.join(", ")),
             }
         }
@@ -118,19 +115,16 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
         if have && mok {
             Finding {
                 status: Status::Ok,
-                name: "auth".into(),
                 detail: "pkexec, pkcheck e mokutil presentes".into(),
             }
         } else if have {
             Finding {
                 status: Status::Warn,
-                name: "auth".into(),
                 detail: "mokutil ausente (pacote mokutil) — só afeta estados MOK/Secure Boot".into(),
             }
         } else {
             Finding {
                 status: Status::Fail,
-                name: "auth".into(),
                 detail: "policykit ausente — o daemon system não poderá autenticar".into(),
             }
         }
@@ -141,24 +135,20 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
         if !sys.is_uefi {
             return Finding {
                 status: Status::Fail,
-                name: "uefi".into(),
                 detail: "máquina não boota em UEFI — plataforma exige UEFI nativo".into(),
             };
         }
         match sys.secure_boot.enabled {
             Some(true) => Finding {
                 status: Status::Warn,
-                name: "uefi".into(),
                 detail: "Secure Boot HABILITADO — drivers/UKIs precisarão ser assinados (mok)".into(),
             },
             Some(false) => Finding {
                 status: Status::Ok,
-                name: "uefi".into(),
                 detail: "UEFI nativo · Secure Boot desabilitado — UKIs de teste bootam direto".into(),
             },
             None => Finding {
                 status: Status::Warn,
-                name: "uefi".into(),
                 detail: "UEFI nativo · valor de Secure Boot ilegível (YUA-UEFI-001)".into(),
             },
         }
@@ -170,14 +160,12 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
         if !esp.mounted {
             return Finding {
                 status: Status::Fail,
-                name: "esp".into(),
                 detail: "não montada — YUA-BOOT-002: instalação UEFI indisponível".into(),
             };
         }
         if esp.free_bytes < 32 * 1024 * 1024 {
             Finding {
                 status: Status::Warn,
-                name: "esp".into(),
                 detail: format!(
                     "montada em {} mas só {} livres — risco de estourar com UKIs",
                     esp.device.clone().unwrap_or_default(),
@@ -187,7 +175,6 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
         } else {
             Finding {
                 status: Status::Ok,
-                name: "esp".into(),
                 detail: format!(
                     "{} · {} livres de {} · escrita {}",
                     esp.device.clone().unwrap_or_default(),
@@ -208,7 +195,6 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
         let Some(root) = host_root_disk() else {
             return Finding {
                 status: Status::Fail,
-                name: "hostdisk".into(),
                 detail: "não consegui determinar o disco do rootfs (/proc/mounts)".into(),
             };
         };
@@ -218,7 +204,6 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
                 let serial = id.serial.unwrap_or_default();
                 Finding {
                     status: Status::Ok,
-                    name: "hostdisk".into(),
                     detail: format!(
                         "{} em {} · serial {} — guard de disco vivo armado (YUA-DISK-010)",
                         disk, root, serial
@@ -227,7 +212,6 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
             }
             Err(e) => Finding {
                 status: Status::Warn,
-                name: "hostdisk".into(),
                 detail: format!("sondagem falhou: {} ({})", e.code, e.message),
             },
         }
@@ -238,7 +222,6 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
         match read_efi_state(&exec) {
             Ok(state) => Finding {
                 status: Status::Ok,
-                name: "efi".into(),
                 detail: format!(
                     "{} entradas legíveis · boot atual {} · leitura sem root OK",
                     state.entries.len(),
@@ -247,7 +230,6 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
             },
             Err(e) => Finding {
                 status: Status::Warn,
-                name: "efi".into(),
                 detail: format!("efibootmgr falhou: {} — {}", e.code, e.message),
             },
         }
@@ -259,7 +241,6 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
         match &daemon {
             Some((sock, info)) => Finding {
                 status: Status::Ok,
-                name: "daemon".into(),
                 detail: format!(
                     "v{} · modo {} · {}",
                     info["version"], info["mode"], sock
@@ -267,7 +248,6 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
             },
             None => Finding {
                 status: Status::Warn,
-                name: "daemon".into(),
                 detail: "não está rodando — leitura direta funciona; destructive exigirá modo system".into(),
             },
         }
@@ -279,12 +259,10 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
         match (&caps.kvm, &caps.ovmf) {
             (Availability::Available, Availability::Available) if qemu == 2 => Finding {
                 status: Status::Ok,
-                name: "virt".into(),
                 detail: "KVM + OVMF + QEMU prontos para testes destrutivos em VM".into(),
             },
             _ => Finding {
                 status: Status::Warn,
-                name: "virt".into(),
                 detail: "incompleto — testes destrutivos da Fase 9 exigem (veja comando abaixo)".into(),
             },
         }
@@ -295,13 +273,11 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
         if caps.tools.iter().any(|t| t.name == "smartctl" && t.found) {
             Finding {
                 status: Status::Ok,
-                name: "smart".into(),
                 detail: "smartctl instalado (detalhes completos via daemon system)".into(),
             }
         } else {
             Finding {
                 status: Status::Warn,
-                name: "smart".into(),
                 detail: "smartctl ausente — YUA-DEP-005: `yua disks` reporta SMART como indisponível (honesto)".into(),
             }
         }
@@ -312,13 +288,11 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
         if caps.tauri_build_ready {
             Finding {
                 status: Status::Ok,
-                name: "tauri".into(),
                 detail: "webkit2gtk-4.1/gtk3/soup3 encontrados — `cargo build` do app compila".into(),
             }
         } else {
             Finding {
                 status: Status::Warn,
-                name: "tauri".into(),
                 detail: "headers webkit2gtk-4.1-dev ausentes — app desktop não compila ATÉ instalar (comando abaixo)".into(),
             }
         }
@@ -331,17 +305,14 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
         match (has_pk, agent) {
             (true, true) => Finding {
                 status: Status::Ok,
-                name: "polkitagent".into(),
                 detail: "agente ativo — o app consegue pedir sua senha na tela".into(),
             },
             (true, false) => Finding {
                 status: Status::Warn,
-                name: "polkitagent".into(),
                 detail: "nenhum agente rodando — o APP pode não conseguir pedir senha na tela (CLI no terminal funciona via prompt de texto); autostart do agente já está em ~/.config/autostart".into(),
             },
             (false, _) => Finding {
                 status: Status::Fail,
-                name: "polkitagent".into(),
                 detail: "pkexec ausente — modo privilegiado não funciona".into(),
             },
         }

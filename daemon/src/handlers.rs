@@ -15,8 +15,8 @@ use yua_core::hw::system::probe_system_info;
 use yua_core::ipc::protocol::{
     Request, Response, WireError, METHOD_BOOT_ARM_FIRMWARE, METHOD_BOOT_CLEAR_NEXT,
     METHOD_BOOT_REBOOT_TO_FIRMWARE, METHOD_BOOT_REMOVE_ENTRY, METHOD_BOOT_SET_NEXT,
-    METHOD_BOOT_SNAPSHOT, METHOD_CAPABILITIES, METHOD_DAEMON_INFO, METHOD_DISKS_LIST,
-    METHOD_ECHO, METHOD_EFI_ENTRIES, METHOD_SYSTEM_INFO, METHOD_SYSTEM_POWEROFF,
+    METHOD_BOOT_SNAPSHOT, METHOD_CAPABILITIES, METHOD_DAEMON_INFO, METHOD_DAEMON_SHUTDOWN,
+    METHOD_DISKS_LIST, METHOD_ECHO, METHOD_EFI_ENTRIES, METHOD_SYSTEM_INFO, METHOD_SYSTEM_POWEROFF,
     METHOD_SYSTEM_REBOOT, PROTOCOL_VERSION,
 };
 use yua_core::power;
@@ -225,6 +225,17 @@ fn handle(req: &Request, cfg: &Config, _peer: &Peer) -> Result<serde_json::Value
             require_confirm(req)?;
             let r = power::system_poweroff(&exec)?;
             Ok(json!({ "powering_off": r.success() }))
+        }
+
+        // Encerramento limpo: responde ANTES de sair (o cliente precisa do OK).
+        METHOD_DAEMON_SHUTDOWN => {
+            require_confirm(req)?;
+            tracing::info!("shutdown solicitado via IPC — encerrando em 300ms");
+            std::thread::spawn(|| {
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                std::process::exit(0);
+            });
+            Ok(json!({ "shutting_down": true }))
         }
 
         other => {

@@ -43,6 +43,9 @@ pub const METHOD_BOOT_ARM_FIRMWARE: &str = "v1.boot.arm_firmware";
 pub const METHOD_SYSTEM_REBOOT: &str = "v1.system.reboot";
 /// Desligamento imediato. Params: {confirm:true}
 pub const METHOD_SYSTEM_POWEROFF: &str = "v1.system.poweroff";
+/// Encerra o daemon de forma limpa (para trocar binário sem sudo/reboot).
+/// Params: {confirm:true}
+pub const METHOD_DAEMON_SHUTDOWN: &str = "v1.daemon.shutdown";
 
 /// Métodos que exigem daemon em modo SISTEMA + autorização polkit
 /// (action com.yua.osd.lowrisk). Em modo dev são recusados (fail-closed).
@@ -54,6 +57,7 @@ pub const PRIVILEGED_METHODS: &[&str] = &[
     METHOD_BOOT_ARM_FIRMWARE,
     METHOD_SYSTEM_REBOOT,
     METHOD_SYSTEM_POWEROFF,
+    METHOD_DAEMON_SHUTDOWN,
 ];
 
 /// Métodos que serão destrutivos no futuro (wipe/format/deploy) — recusados

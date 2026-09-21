@@ -18,6 +18,7 @@ pub fn run(
         DaemonAction::Status => status(json, color, socket),
         DaemonAction::Run => run_dev(socket),
         DaemonAction::System => start_system(color),
+        DaemonAction::Stop => stop_system(color),
     }
 }
 
@@ -124,6 +125,21 @@ fn start_system(color: bool) -> Result<(), YuaError> {
         paint(info["mode"].as_str().unwrap_or("?"), "green", color),
         info["pid"],
         sock.display()
+    );
+    Ok(())
+}
+
+fn stop_system(color: bool) -> Result<(), YuaError> {
+    let sock = ensure_system_daemon(color)?;
+    let mut client = YuaClient::connect(&sock)?;
+    let r = client.call(
+        yua_core::ipc::protocol::METHOD_DAEMON_SHUTDOWN,
+        serde_json::json!({ "confirm": true }),
+    )?;
+    println!(
+        "  {} daemon encerrando ({})",
+        ui::tag_ok(color),
+        r["shutting_down"]
     );
     Ok(())
 }

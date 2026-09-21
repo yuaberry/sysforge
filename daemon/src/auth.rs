@@ -111,8 +111,10 @@ pub fn authorize(mode: DaemonMode, peer: &Peer, method: &str) -> Decision {
                     5,
                     "Autorização negada pelo polkit",
                 )
-                .with_technical(format!("pkcheck saiu com {code} (1=negado, 2=cancelado pelo usuário, 3=não autorizado)"))
-                .with_recommendation("Se cancelou por engano, repita a operação — o diálogo reaparece.");
+                .with_technical(format!(
+                    "pkcheck saiu com {code} — 1/3=negado · 2=cancelado · 4=erro interno · 5=ação desconhecida (a policy com.yua.osd está instalada? scripts/install-daemon.sh) · 127=sem como pedir a senha ao usuário (sem agente/diálogo neste contexto — rode de um terminal ou app na sessão gráfica)"
+                ))
+                .with_recommendation("Rode `bash scripts/install-daemon.sh` (instala a policy polkit) e execute o comando de um terminal/app na sua sessão gráfica.");
                 return Decision::Deny(WireError::from(e));
             }
             Err(e) => return Decision::Deny(WireError::from(e)),

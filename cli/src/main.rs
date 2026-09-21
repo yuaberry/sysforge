@@ -125,6 +125,8 @@ enum DaemonAction {
     Run,
     /// Sobe o daemon em modo SISTEMA via pkexec (polkit pede sua senha)
     System,
+    /// Encerra o daemon system de forma limpa (polkit pede sua senha)
+    Stop,
 }
 
 fn main() {
