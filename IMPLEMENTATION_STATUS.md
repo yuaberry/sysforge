@@ -114,6 +114,14 @@ verde (tsc + vite) · CLI funcional contra o hardware real.
 - [x] Página "Instalar Windows 11" no app: checklist + gerador + BootNext/BIOS/reboot/off
 - [x] Entradas mortas detectáveis (o WIN_INSTALL quebrado desta máquina aparece marcado)
 
+### [x] Lições de campo integradas à ferramenta
+- [x] Doctor: check #11 "agente de diálogo polkit" — detecta quando o APP não
+      conseguirá pedir senha na tela (sem agente + sem TTY = Request dismissed)
+      e instrui a correção (autostart + reinício de sessão)
+- [x] Autostart do agente MATE em `~/.config/autostart/` (instalado pela sessão)
+- [x] `ensure_system_daemon` com recomendação precisa: terminal do usuário
+      (pkttyagent) como caminho garantido
+
 ### [!] Bloqueios que dependem do USUÁRIO (não do código)
 - [!] **Headers do app desktop + ferramentas runtime**: exigem apt (senha do usuário).
       O polkit não exibe diálogo para pedidos originados do shell do agente — o comando

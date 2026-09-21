@@ -324,6 +324,29 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
         }
     }));
 
+    // 11 — agente de diálogo polkit (senhas na tela para o APP)
+    findings.push(check("agente de diálogo polkit", color, || {
+        let has_pk = caps.tools.iter().any(|t| t.name == "pkexec" && t.found);
+        let agent = yua_core::capability::polkit_dialog_agent_present();
+        match (has_pk, agent) {
+            (true, true) => Finding {
+                status: Status::Ok,
+                name: "polkitagent".into(),
+                detail: "agente ativo — o app consegue pedir sua senha na tela".into(),
+            },
+            (true, false) => Finding {
+                status: Status::Warn,
+                name: "polkitagent".into(),
+                detail: "nenhum agente rodando — o APP pode não conseguir pedir senha na tela (CLI no terminal funciona via prompt de texto); autostart do agente já está em ~/.config/autostart".into(),
+            },
+            (false, _) => Finding {
+                status: Status::Fail,
+                name: "polkitagent".into(),
+                detail: "pkexec ausente — modo privilegiado não funciona".into(),
+            },
+        }
+    }));
+
     // ---- resumo ----
     let (ok, warn, fail) = findings.iter().fold((0, 0, 0), |(o, w, f), x| match x.status {
         Status::Ok => (o + 1, w, f),

@@ -63,3 +63,16 @@ yua daemon status                # deve responder modo "system"
 ## Repositório
 
 Privado: `github.com/yuaberry/yua-os-manager` (main).
+
+## Notas de campo: polkit, TTY e diálogos (aprendido em produção)
+
+- **CLI em terminal funciona SEMPRE**: `pkexec` sem agente gráfico cai no
+  `pkttyagent` — prompt de texto no próprio terminal do usuário.
+- **App desktop (sem TTY) precisa de um AGENTE de diálogo** (ex.: MATE
+  authentication agent) registrado na sessão. Sem ele, pedidos são descartados
+  ("Request dismissed") — o doctor tem um check dedicado que detecta isso.
+- O YUA instala `~/.config/autostart/polkit-mate-authentication-agent-1.desktop`
+  quando o ambiente não tem agente — reinicie a sessão para ativar.
+- Contextos sem TTY e sem sessão gráfica (SSH puro, CI, agentes de código)
+  NÃO conseguem autenticar por design — fail-closed correto: privilégio passa
+  pelo teclado do usuário, não pelo shell de um bot.

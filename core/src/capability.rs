@@ -98,6 +98,32 @@ fn pkg_config_exists(module: &str) -> bool {
     matches!(exec.run_readonly(spec), Ok(r) if r.success())
 }
 
+/// Existe um AGENTE DE DIÁLOGO do polkit rodando na sessão?
+/// Sem agente, o app desktop (sem TTY) não consegue mostrar o diálogo de
+/// senha — só funciona via terminal (prompt de texto). CLI tem fallback.
+///
+/// Lê /proc/*/cmdline (completo — `comm` trunca em 15 chars) e casa
+/// "authentication-agent" (MATE/GNOME/KDE). O `polkit-agent-helper` NÃO casa
+/// (é o verificador root spawned durante auth, não um agente de diálogo).
+pub fn polkit_dialog_agent_present() -> bool {
+    let Ok(dirs) = std::fs::read_dir("/proc") else {
+        return false;
+    };
+    for entry in dirs.flatten() {
+        let Ok(cmdline) =
+            std::fs::read_to_string(format!("/proc/{}/cmdline", entry.file_name().to_string_lossy()))
+        else {
+            continue;
+        };
+        // cmdline separa args com \0; normaliza para busca simples.
+        let full = cmdline.replace('\0', " ");
+        if full.contains("authentication-agent") {
+            return true;
+        }
+    }
+    false
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct CapabilityReport {
     pub tools: Vec<ToolStatus>,

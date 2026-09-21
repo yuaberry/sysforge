@@ -69,7 +69,8 @@ pub fn ensure_system_daemon<F: FnMut(u32)>(
                 7,
                 "O daemon system não apareceu no socket a tempo",
             )
-            .with_recommendation("Você autorizou o diálogo do polkit na tela? Tente de novo — ou rode `pkexec yua-osd --system` num terminal para ver o erro."));
+            .with_technical("Sem agente de diálogo polkit e sem TTY, a senha não pode ser pedida (Request dismissed)")
+            .with_recommendation("Num TERMINAL seu, rode `yua daemon system` — o prompt de senha aparece ali (funciona sempre). No app, ative o agente: ~/.config/autostart (já instalado) + reiniciar a sessão."));
         }
     }
 }
