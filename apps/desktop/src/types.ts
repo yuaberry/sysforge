@@ -77,9 +77,21 @@ export interface EfiBootEntry {
 
 export interface EfiBootState {
   boot_current?: string | null;
+  boot_next?: string | null;
   timeout_secs?: number | null;
   boot_order: string[];
   entries: EfiBootEntry[];
+}
+
+/// Espelha EfiBootState::usb_entry_id() (o método não serializa no JSON).
+export function usbEntryId(efi?: EfiBootState | null): string | null {
+  if (!efi) return null;
+  const found = efi.entries.find(
+    (e) =>
+      (e.name.toLowerCase().includes('usb') || e.name.toLowerCase().includes('removable')) &&
+      (e.device_path ?? '').includes('VenMsg'),
+  );
+  return found ? found.id : null;
 }
 
 export interface EspInfo {
@@ -138,4 +150,39 @@ export interface BackendError {
   message: string;
   technical?: string;
   recommendation?: string;
+}
+
+// ---- Checklist Windows 11 ----
+export type ItemStatus = 'ok' | 'warn' | 'fail' | 'info';
+
+export interface ChecklistItem {
+  id: string;
+  status: ItemStatus;
+  title: string;
+  detail: string;
+  hint?: string | null;
+}
+
+export interface IsoFile {
+  path: string;
+  name: string;
+  size_bytes: number;
+  looks_like_windows11: boolean;
+}
+
+export interface RemovableMedia {
+  name: string;
+  path: string;
+  size_bytes: number;
+  fstype?: string | null;
+  mounted_at?: string | null;
+  is_ventoy: boolean;
+  model?: string | null;
+}
+
+export interface WindowsChecklist {
+  items: ChecklistItem[];
+  isos: IsoFile[];
+  media: RemovableMedia[];
+  recommendation: string;
 }

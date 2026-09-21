@@ -16,6 +16,8 @@ pub mod logging;
 pub mod hw;
 pub mod disk;
 pub mod boot;
+pub mod power;
+pub mod windows;
 pub mod ipc;
 
 pub const YUA_VERSION: &str = env!("CARGO_PKG_VERSION");

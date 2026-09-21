@@ -84,7 +84,50 @@ verde (tsc + vite) · CLI funcional contra o hardware real.
 
 ---
 
-## Fase 2 — Planejamento de instalação `[ ]`
+## Fase 2 (parcial) — Controle de boot/energia + fluxo Windows 11 ✅
+
+**Prova executável:** 50 testes verdes (46 core + 3 auth pkcheck + 1 integração) ·
+`yua winstall` roda checklist real (UEFI/TPM/ISO/USB/Ventoy/OsIndications/daemon) ·
+`yua boot` marca entradas mortas (WIN_INSTALL `File()` vazio) · build do frontend verde.
+
+### [x] Controle REAL de energia e BIOS
+- [x] "Reiniciar direto na BIOS": `OsIndications` (bit BOOT_TO_FIRMWARE_UI) —
+      mecanismo UEFI oficial, confirmado suportado pelo firmware deste Vostro (testado)
+- [x] `yua boot firmware` (reboot→setup) / `--arm` (só arma o próximo boot)
+- [x] `yua power reboot|off --confirm` (via systemctl, root)
+- [x] Daemon system via **pkexec** — polkit pede a senha na tela do usuário
+- [x] Autorização por método: **pkcheck** com pid+starttime (SO_PEERCRED) — YUA-AUTH-005
+
+### [x] Boot controlado
+- [x] `v1.boot.set_next`: BootNext ONE-SHOT com snapshot prévio; **BootOrder nunca escrito**
+- [x] `yua boot next` (auto-detecta entrada USB 0012 do firmware nesta máquina)
+- [x] `yua boot remove <ID>`: guarda de internas do firmware (FvFile/VenMsg intocáveis) +
+      confirmação digitada + snapshot
+- [x] Snapshot do estado UEFI (`efibootmgr -v`) antes de QUALQUER mutação
+
+### [x] Fluxo Windows 11 (o objetivo declarado do usuário)
+- [x] `yua winstall`: checklist honesto com 9 sondagens reais
+- [x] Gerador `autounattend.xml`: bypass LabConfig (TPM/SecureBoot/RAM/CPU — hardware
+      antigo instala), locale pt-BR, edição Pro/Home por chave genérica, **zero senhas no XML**
+- [x] Modo full-wipe (apaga disco 0 na instalação) exige confirmação DIGITADA "APAGAR"
+- [x] Cópia de ISO para pendrive **Ventoy** com progresso real de bytes
+- [x] Página "Instalar Windows 11" no app: checklist + gerador + BootNext/BIOS/reboot/off
+- [x] Entradas mortas detectáveis (o WIN_INSTALL quebrado desta máquina aparece marcado)
+
+### [!] Bloqueios que dependem do USUÁRIO (não do código)
+- [!] **Headers do app desktop + ferramentas runtime**: exigem apt (senha do usuário).
+      O polkit não exibe diálogo para pedidos originados do shell do agente — o comando
+      deve ser executado NO TERMINAL DO USUÁRIO: `bash scripts/bootstrap-linux.sh`.
+      Depois: `cd apps/desktop/src-tauri && cargo build` (e `npx tauri dev` na raiz do app).
+- [!] **ISO do Windows 11**: ausente (6+ GiB) — download manual do link oficial
+      (o checklist mostra) e salvar em ~/Downloads.
+- [!] **Pendrive**: nenhum conectado — inserir um com Ventoy (o checklist detecta).
+- [!] **Métodos destrutivos** (wipe/format/deploy): recusados por projeto (YUA-AUTH-004)
+      até a fase de deploy com plano validado + rollback + testes QEMU.
+
+---
+
+## Fase 2 (restante) — Planejamento de instalação `[ ]`
 - [ ] Modos express/avançado/automated/recovery/custom
 - [ ] Plano de instalação serializável + validação
 - [ ] Métodos de escrita no daemon com pkcheck por classe de risco

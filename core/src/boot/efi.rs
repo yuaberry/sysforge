@@ -27,9 +27,68 @@ pub struct EfiBootEntry {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EfiBootState {
     pub boot_current: Option<String>,
+    /// BootNext armado (one-shot) — some após o próximo boot.
+    #[serde(default)]
+    pub boot_next: Option<String>,
     pub timeout_secs: Option<u64>,
     pub boot_order: Vec<String>,
     pub entries: Vec<EfiBootEntry>,
+}
+
+impl EfiBootState {
+    pub fn entry(&self, id: &str) -> Option<&EfiBootEntry> {
+        self.entries.iter().find(|e| e.id == id)
+    }
+
+    /// ID da entrada USB do firmware ("USB Storage Device" etc.) para BootNext.
+    pub fn usb_entry_id(&self) -> Option<&str> {
+        self.entries
+            .iter()
+            .find(|e| {
+                let n = e.name.to_lowercase();
+                (n.contains("usb") || n.contains("removable")) && self.is_removable_media_entry(e)
+            })
+            .map(|e| e.id.as_str())
+    }
+
+    fn is_removable_media_entry(&self, e: &EfiBootEntry) -> bool {
+        // Entradas VenMsg/USB do firmware (não FvFile interno).
+        e.device_path
+            .as_deref()
+            .map(|dp| dp.contains("VenMsg"))
+            .unwrap_or(false)
+    }
+}
+
+impl EfiBootEntry {
+    /// Entrada aponta para arquivo vazio — criada e abandonada (ex.: um
+    /// "WIN_INSTALL" com loader `/File()`). É a definição de entrada morta.
+    pub fn is_dead_file_entry(&self) -> bool {
+        match (&self.device_path, &self.loader_path) {
+            (Some(dp), None) => dp.contains("HD(") && dp.ends_with("File()"),
+            _ => false,
+        }
+    }
+
+    /// Entrada interna do firmware (Setup, Diagnostics, menus de boot).
+    /// NUNCA deve ser removida pelo SO — é gerada pelo próprio firmware.
+    pub fn is_firmware_internal(&self) -> bool {
+        self.device_path
+            .as_deref()
+            .map(|dp| dp.contains("FvFile(") || dp.contains("VenMsg("))
+            .unwrap_or(false)
+    }
+
+    /// Pode ser removida com segurança pelo YUA (após snapshot + confirmação)?
+    /// Apenas entradas de disco/arquivo — internas do firmware são intocáveis.
+    pub fn is_removable_by_os(&self) -> bool {
+        !self.is_firmware_internal()
+            && self
+                .device_path
+                .as_deref()
+                .map(|dp| dp.contains("HD(") || dp.contains("PciRoot("))
+                .unwrap_or(false)
+    }
 }
 
 /// Extrai o caminho de arquivo UEFI de `/File(\caminho)` — NÃO confundir com
@@ -70,6 +129,13 @@ pub fn parse_efibootmgr(output: &str) -> EfiBootState {
             let v = rest.trim();
             if !v.is_empty() {
                 state.boot_current = Some(v.to_string());
+            }
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("BootNext:") {
+            let v = rest.trim();
+            if !v.is_empty() {
+                state.boot_next = Some(v.to_string());
             }
             continue;
         }
@@ -163,7 +229,18 @@ mod tests {
     fn parses_real_efibootmgr_output() {
         let s = parse_efibootmgr(FIXTURE);
         assert_eq!(s.boot_current.as_deref(), Some("0000"));
+        assert_eq!(s.boot_next, None, "fixture não tem BootNext armado");
         assert_eq!(s.timeout_secs, Some(0));
+
+        // WIN_INSTALL real desta máquina: HD(...)/File() com loader VAZIO
+        // → entrada MORTA detectável; Setup (FvFile) é firmware interno.
+        let win = s.entries.iter().find(|e| e.id == "001C").unwrap();
+        assert!(win.is_dead_file_entry(), "WIN_INSTALL com /File() vazio é entrada morta");
+        assert!(win.is_removable_by_os());
+        let setup = s.entries.iter().find(|e| e.id == "0010").unwrap();
+        assert!(!setup.is_dead_file_entry());
+        assert!(setup.is_firmware_internal(), "FvFile é interno do firmware");
+        assert!(!setup.is_removable_by_os(), "internas do firmware nunca são removíveis");
         assert_eq!(&s.boot_order[..3], &["0000", "001C", "0010"]);
         assert_eq!(s.entries.len(), 4);
 

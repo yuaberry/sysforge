@@ -145,13 +145,13 @@ fn handle_connection(stream: UnixStream, cfg: &Config) -> Result<(), YuaError> {
         }
         let resp = match serde_json::from_str::<Request>(&line) {
             Ok(req) => {
-                let decision = auth::authorize(cfg.mode, peer.uid, &req.method);
+                let decision = auth::authorize(cfg.mode, &peer, &req.method);
                 let allowed = matches!(decision, auth::Decision::Allow);
                 audit(cfg.mode, peer, &req.method, allowed);
                 match decision {
                     auth::Decision::Allow => {
                         tracing::info!(uid = peer.uid, pid = peer.pid, method = %req.method, "chamada");
-                        handlers::dispatch(&req, cfg)
+                        handlers::dispatch(&req, cfg, &peer)
                     }
                     auth::Decision::Deny(e) => {
                         tracing::warn!(uid = peer.uid, pid = peer.pid, method = %req.method, code = %e.code, "recusada");

@@ -1,5 +1,6 @@
 import { useBackend, Card, ErrorCard, Skeleton, KV, Badge } from './Dashboard';
 import { fmtBytes } from '../lib/yua';
+import ControlPanel from '../components/ControlPanel';
 import type { EspInfo, EfiBootState, SecureBootInfo } from '../types';
 
 export default function BootPage() {
@@ -36,6 +37,16 @@ export default function BootPage() {
                 />
               )}
               <KV k="Timeout" v={`${efi.data.timeout_secs ?? '—'}s`} />
+              <KV
+                k="BootNext"
+                v={
+                  efi.data.boot_next ? (
+                    <Badge kind="info">{efi.data.boot_next} (one-shot armado)</Badge>
+                  ) : (
+                    <span className="dim">nenhum</span>
+                  )
+                }
+              />
               <KV k="BootOrder" v={<span className="mono">{efi.data.boot_order.join(' → ') || '—'}</span>} />
             </Card>
 
@@ -92,6 +103,8 @@ export default function BootPage() {
               prévio do estado original.
             </p>
           </Card>
+
+          <ControlPanel efi={efi.data} showEntrySelector />
         </>
       )}
     </div>

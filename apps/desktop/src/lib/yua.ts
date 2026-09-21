@@ -1,5 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { BackendError } from '../types';
+import type { EfiBootState } from '../types';
+
+export { usbEntryId } from '../types';
 
 /** Levantado quando o frontend roda fora do app Tauri (ex.: vite dev puro). */
 export class BridgeUnavailable extends Error {

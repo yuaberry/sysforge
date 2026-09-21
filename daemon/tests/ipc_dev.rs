@@ -9,7 +9,10 @@ use std::time::Duration;
 
 use serde_json::json;
 use yua_core::error::YuaError;
-use yua_core::ipc::protocol::{METHOD_DISKS_LIST, METHOD_ECHO, METHOD_EFI_ENTRIES, METHOD_SYSTEM_INFO};
+use yua_core::ipc::protocol::{
+    METHOD_BOOT_SET_NEXT, METHOD_BOOT_SNAPSHOT, METHOD_DISKS_LIST, METHOD_ECHO,
+    METHOD_EFI_ENTRIES, METHOD_SYSTEM_INFO,
+};
 use yua_core::ipc::YuaClient;
 
 fn spawn_daemon(socket: &PathBuf) -> Child {
@@ -80,11 +83,16 @@ fn dev_daemon_protocol_and_fail_closed() -> Result<(), YuaError> {
         assert_eq!(err.code, "YUA-AUTH-002");
         assert!(!err.recommendation.is_empty());
 
-        // O mesmo vale para BootNext (escrita EFI) — registro destrutivo.
+        // BootNext agora EXISTE, mas em dev continua fail-closed (YUA-AUTH-002).
         let err = client
-            .call("v1.boot.set_next", json!({"entry": "0000"}))
+            .call(METHOD_BOOT_SET_NEXT, json!({"entry_id": "0000", "confirm": true}))
             .unwrap_err();
         assert_eq!(err.code, "YUA-AUTH-002");
+
+        // Snapshot é read-only ⇒ permitido em dev, com arquivo real gravado.
+        let snap = client.call(METHOD_BOOT_SNAPSHOT, json!({}))?;
+        assert!(snap["snapshot_path"].as_str().is_some());
+        assert!(snap["state"]["entries"].as_array().unwrap().len() >= 13);
 
         // Método desconhecido → YUA-NOTSUP-001, nunca "silêncio".
         let err = client.call("v1.metodo.inexistente", json!({})).unwrap_err();

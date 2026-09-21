@@ -12,7 +12,7 @@ Uma ferramenta que particiona discos e manipula boot pode destruir dados. As ame
 6. **Vazamento de segredos** (chaves de ativação, senhas em log);
 7. **Uso acidental do disco de desenvolvimento**.
 
-## Barreiras implementadas (Fase 1)
+## Barreiras implementadas (Fases 1–2 parcial)
 
 | # | Barreira | Onde | Código |
 |---|---|---|---|
@@ -21,13 +21,17 @@ Uma ferramenta que particiona discos e manipula boot pode destruir dados. As ame
 | 3 | Destrutivo exige `operation_id` persistido antes | `executor.rs` | `YUA-STATE-001` |
 | 4 | Sem shell: `Command::new(program).args([...])` sempre | `executor.rs` | — |
 | 5 | Timeout e locale determinístico (`LC_ALL=C`) em todo comando | `executor.rs` | — |
-| 6 | Fail-closed do daemon: registro destrutivo recusado em TODOS os modos na Fase 1 | `daemon/auth.rs` | `YUA-AUTH-002` (dev) / `YUA-AUTH-004` (system) |
+| 6 | Fail-closed do daemon: destrutivo futuro recusado em TODOS os modos | `daemon/auth.rs` | `YUA-AUTH-002` / `YUA-AUTH-004` |
 | 7 | Identidade real do chamador via `SO_PEERCRED` (kernel) | `daemon/server.rs` | — |
-| 8 | Auditoria JSONL de TODA chamada (permitida ou negada) | `daemon/server.rs` | — |
-| 9 | State machine com escrita atômica + checksum SHA-256; adulteração detectada | `state.rs` | `YUA-STATE-003` |
-| 10 | ESP root-only (umask=0077) respeitada: escrita só via daemon | `boot/esp.rs` | `YUA-BOOT-002` quando ausente |
-| 11 | DryRun nunca executa destrutivo (loga `WOULD_RUN`) | `executor.rs` | — |
-| 12 | Nenhuma operação real executa como "teste" no disco físico do dev | projeto | testes destrutivos: QEMU na Fase 9 |
+| 8 | Métodos privilegiados (boot/energia) exigem modo SYSTEM + **pkcheck polkit** com o pid+starttime do chamador — senha pedida ao usuário na tela | `daemon/auth.rs` | `YUA-AUTH-005` |
+| 9 | Confirmação explícita (`confirm:true`) obrigatória em todo método de efeito real | `daemon/handlers.rs` | `YUA-AUTH-006` |
+| 10 | Snapshot completo do UEFI ANTES de qualquer mutação de boot | `core/boot/snapshot.rs` | arquivo auditável |
+| 11 | Entradas internas do firmware (FvFile/VenMsg) são INTOCÁVEIS na remoção | `daemon/handlers.rs` | `YUA-BOOT-005` |
+| 12 | BootNext é one-shot — BootOrder PERMANENTE nunca é escrito | `daemon/handlers.rs` | — |
+| 13 | Auditoria JSONL de TODA chamada (permitida ou negada) | `daemon/server.rs` | — |
+| 14 | State machine com escrita atômica + checksum SHA-256; adulteração detectada | `state.rs` | `YUA-STATE-003` |
+| 15 | Autounattend NUNCA contém senhas; conta é criada no OOBE (decisão consciente do usuário) | `core/windows/unattend.rs` | testado |
+| 16 | Modo full-wipe do autounattend exige confirmação DIGITADA ("APAGAR") no CLI | `cli/winstall.rs` | — |
 
 ## Autorização (Fase 2+)
 

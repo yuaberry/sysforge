@@ -53,9 +53,14 @@ Persistência atômica (tmp + fsync + rename) com checksum SHA-256 do próprio c
 
 NDJSON sobre unix socket. `Request {id, method, params}` / `Response {id, ok, result|error{code,message,...}}`.
 
-Métodos publicados (todos read-only): `v1.echo`, `v1.system.info`, `v1.disks.list`, `v1.efi.entries`, `v1.capabilities`, `v1.daemon.info`.
+Métodos **read-only**: `v1.echo`, `v1.system.info`, `v1.disks.list`, `v1.efi.entries`, `v1.capabilities`, `v1.daemon.info`, `v1.boot.snapshot` (funcionam em dev e system).
 
-O registro `DESTRUCTIVE_REGISTRY` (`v1.disk.wipe`, `v1.disk.format`, `v1.deploy.start`, `v1.boot.set_next`) é recusado em TODOS os modos na Fase 1: modo dev → `YUA-AUTH-002`; modo system → `YUA-AUTH-004`. Isso é fail-closed testável (ver `daemon/tests/ipc_dev.rs`).
+Métodos **privilegiados** (só modo system + pkcheck polkit + `confirm:true`): `v1.boot.set_next` (BootNext one-shot — nunca toca BootOrder), `v1.boot.clear_next`, `v1.boot.remove_entry` (guardas: internas do firmware intocáveis, snapshot prévio), `v1.boot.arm_firmware` (OsIndications → próximo boot abre a BIOS), `v1.boot.reboot_to_firmware`, `v1.system.reboot`, `v1.system.poweroff`.
+
+O registro `DESTRUCTIVE_REGISTRY` (`v1.disk.wipe`, `v1.disk.format`, `v1.deploy.start`) continua recusado em TODOS os modos até a fase de deploy real: dev → `YUA-AUTH-002`; system → `YUA-AUTH-004`. Fail-closed testável (ver `daemon/tests/ipc_dev.rs`).
+
+### Autorização (núcleo da Fase 2 parcial)
+O daemon extrai pid/uid via `SO_PEERCRED` (kernel — infalsificável), lê o starttime em `/proc/<pid>/stat` e chama `pkcheck --process pid,starttime --action-id com.yua.osd.lowrisk --allow-user-interaction`. O polkit mostra o diálogo de senha na tela do usuário; o daemon só vê o veredito. Sem polkit, sem resposta ou negado → RECUSA (`YUA-AUTH-005`).
 
 ### Modos do daemon
 - **dev** (`yua-osd --dev`): socket em `$XDG_RUNTIME_DIR`, chmod 0600, só o próprio uid conecta; destrutivo recusado.

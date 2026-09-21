@@ -1,16 +1,21 @@
 //! Autorização por conexão: SO_PEERCRED (uid/pid REAIS do kernel — o cliente
-//! não consegue forjar) + modo do daemon.
+//! não consegue forjar) + classes de método + polkit.
 //!
-//! Fase 1 (atual): todos os métodos publicados são read-only; o registro
-//! DESTRUCTIVE_REGISTRY é recusado em TODOS os modos — fail-closed testável.
-//! Fase 2: modo system passa a exigir pkcheck (polkit) por classe de risco:
-//!   com.yua.osd.readonly    → allow_active
-//!   com.yua.osd.lowrisk     → auth_admin_keep
-//!   com.yua.osd.destructive → auth_admin
+//! Modelo de decisão:
+//! - DESTRUTIVO não-implementado (wipe/format/deploy) → recusado SEMPRE.
+//! - PRIVILEGIADO implementado (set_next/reboot/poweroff/...) → exige daemon
+//!   em modo SYSTEM + `pkcheck` com a action com.yua.osd.lowrisk.
+//!   O pkcheck pede a senha AO USUÁRIO no diálogo do polkit (agente da
+//!   sessão) — o daemon nunca vê a senha, só o veredito.
+//! - Read-only → modo dev: mesmo uid; modo system: liberado.
+//!
+//! Fail-closed: polkit indisponível, sem resposta, ou negado → RECUSA.
 
 use yua_core::error::{ErrorDomain, YuaError};
-use yua_core::ipc::protocol::{WireError, DESTRUCTIVE_REGISTRY};
+use yua_core::executor::{CommandSpec, Executor};
+use yua_core::ipc::protocol::{WireError, DESTRUCTIVE_REGISTRY, PRIVILEGED_METHODS};
 
+use crate::server::Peer;
 use crate::DaemonMode;
 
 pub enum Decision {
@@ -18,8 +23,49 @@ pub enum Decision {
     Deny(WireError),
 }
 
-pub fn authorize(mode: DaemonMode, peer_uid: u32, method: &str) -> Decision {
-    // Barreira 1 — registro destrutivo: recusado SEMPRE na Fase 1.
+/// starttime do processo (campo 22 de /proc/<pid>/stat) para o pkcheck.
+/// O comm (campo 2) pode conter espaços/parênteses — o parse pula até ')'.
+fn proc_start_time(pid: u32) -> Result<u64, YuaError> {
+    let raw = std::fs::read_to_string(format!("/proc/{pid}/stat")).map_err(|_| {
+        YuaError::new(
+            ErrorDomain::Auth,
+            10,
+            "Processo chamador não encontrado para autorização polkit",
+        )
+        .with_technical(format!("leitura de /proc/{pid}/stat falhou"))
+    })?;
+    let after_comm = raw.split_once(')').ok_or_else(|| {
+        YuaError::new(ErrorDomain::Auth, 11, "Formato inesperado de /proc/<pid>/stat")
+    })?;
+    // Após o comm, os campos continuam a partir do campo 3 (state).
+    // starttime é o campo 22 ⇒ índice 19 no resto (0-based, contando do 3).
+    let token = after_comm
+        .1
+        .split_whitespace()
+        .nth(19)
+        .ok_or_else(|| YuaError::new(ErrorDomain::Auth, 11, "stat sem starttime"))?;
+    token
+        .parse::<u64>()
+        .map_err(|_| YuaError::new(ErrorDomain::Auth, 11, "starttime não numérico"))
+}
+
+/// Executa pkcheck em nome do chamador. Result<u64> devolve o exit code.
+fn run_pkcheck(peer: &Peer, action_id: &str) -> Result<i32, YuaError> {
+    let start = proc_start_time(peer.pid)?;
+    let exec = Executor::default();
+    let spec = CommandSpec::new("pkcheck")
+        .arg("--process")
+        .arg(format!("{},{}", peer.pid, start))
+        .arg("--action-id")
+        .arg(action_id)
+        .arg("--allow-user-interaction")
+        .timeout(std::time::Duration::from_secs(180));
+    let r = exec.run_readonly(spec)?;
+    Ok(r.exit_code.unwrap_or(-1))
+}
+
+pub fn authorize(mode: DaemonMode, peer: &Peer, method: &str) -> Decision {
+    // Barreira 1 — destrutivo não-implementado: recusado SEMPRE.
     if DESTRUCTIVE_REGISTRY.contains(&method) {
         let e = match mode {
             DaemonMode::Dev => YuaError::new(
@@ -27,40 +73,92 @@ pub fn authorize(mode: DaemonMode, peer_uid: u32, method: &str) -> Decision {
                 2,
                 "Operação destrutiva recusada: daemon em modo dev é somente leitura",
             )
-            .with_technical(format!(
-                "método {method} está no registro destrutivo; modo dev nunca libera escrita"
-            ))
             .with_recommendation(
-                "Isto é por segurança. Para operações destrutivas use o daemon em modo sistema (systemd) — e ainda assim só após a Fase 2 implementá-las.",
+                "Isto é por segurança. Operações destrutivas exigem o daemon em modo sistema (systemd/pkexec) e, mesmo lá, só existem quando implementadas com todos os guards.",
             ),
             DaemonMode::System => YuaError::new(
                 ErrorDomain::Auth,
                 4,
-                "Método destrutivo ainda não implementado (Fase 1 = somente leitura)",
+                "Método destrutivo ainda não implementado (aguarda fase de deploy)",
             )
             .with_recommendation(
-                "O planejamento de instalação real chega no Milestone 1 (UKI + BootNext). Nada de destrutivo roda antes disso.",
+                "O deploy real chega com plano validado, snapshot e rollback. Nada destrutivo roda antes disso.",
             ),
         };
-        return Decision::Deny(e.into());
+        return Decision::Deny(WireError::from(e));
     }
 
-    // Barreira 2 — modo dev: somente o próprio usuário.
+    // Barreira 2 — privilégio por MODO. Dev nunca libera escrita.
+    if PRIVILEGED_METHODS.contains(&method) {
+        if mode == DaemonMode::Dev {
+            let e = YuaError::new(
+                ErrorDomain::Auth,
+                2,
+                format!("Método {method} exige o daemon em modo sistema"),
+            )
+            .with_recommendation(
+                "Rode `yua daemon system` — o polkit pedirá sua senha na tela. O modo dev é somente leitura POR CONSTRUÇÃO.",
+            );
+            return Decision::Deny(e.into());
+        }
+        // Modo system: polkit decide (com.yua.osd.lowrisk → auth_admin_keep:
+        // pede a senha ao usuário na tela e lembra por alguns minutos).
+        match run_pkcheck(peer, "com.yua.osd.lowrisk") {
+            Ok(0) => return Decision::Allow,
+            Ok(code) => {
+                let e = YuaError::new(
+                    ErrorDomain::Auth,
+                    5,
+                    "Autorização negada pelo polkit",
+                )
+                .with_technical(format!("pkcheck saiu com {code} (1=negado, 2=cancelado pelo usuário, 3=não autorizado)"))
+                .with_recommendation("Se cancelou por engano, repita a operação — o diálogo reaparece.");
+                return Decision::Deny(WireError::from(e));
+            }
+            Err(e) => return Decision::Deny(WireError::from(e)),
+        }
+    }
+
+    // Read-only publicado: dev exige mesmo uid; system liberado.
     if mode == DaemonMode::Dev {
         let my_uid = unsafe { libc::getuid() };
-        if peer_uid != my_uid {
+        if peer.uid != my_uid {
             let e = YuaError::new(
                 ErrorDomain::Auth,
                 1,
                 "Conexão recusada: o daemon dev aceita apenas o usuário que o iniciou",
             )
-            .with_technical(format!("peer uid {peer_uid} ≠ uid do daemon {my_uid}"));
+            .with_technical(format!("peer uid {} ≠ uid do daemon {my_uid}", peer.uid));
             return Decision::Deny(e.into());
         }
     }
-
-    // Métodos read-only publicados: liberados (system mode: qualquer usuário
-    // local conecta; autenticação polkit por método entra na Fase 2 junto
-    // com os métodos de escrita).
     Decision::Allow
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn proc_start_time_parses_real_pid() {
+        // Nosso próprio /proc/self/stat é parseável — campo 22 > 0.
+        let start = proc_start_time(std::process::id()).unwrap();
+        assert!(start > 0);
+    }
+
+    #[test]
+    fn proc_start_time_parses_comm_with_spaces() {
+        // comm com parênteses/espaços: "(web: YUA test)" — o ')' dentro do
+        // comm NÃO confunde o parser de verdade, mas ')' em comm é o caso
+        // clássico de quebra; aqui usamos um comm normal com espaço.
+        let line = "1234 (pk exec agent) S 1 1234 1234 0 -1 4194560 100 0 0 0 5 3 0 0 20 0 1 0 987654 5000000 0 0 0 0";
+        let after = line.split_once(')').unwrap();
+        let token = after.1.split_whitespace().nth(19).unwrap();
+        assert_eq!(token, "987654");
+    }
+
+    #[test]
+    fn pkcheck_binary_exists_on_this_machine() {
+        assert!(yua_core::executor::which("pkcheck").is_some(), "pkcheck presente no Mint 22.3");
+    }
 }

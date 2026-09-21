@@ -115,3 +115,27 @@ nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
 
 .plain-list { color: var(--dim); line-height: 1.8; }
 code { font-family: var(--mono); background: var(--bg-elev); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
+
+/* ---- formulários e botões ---- */
+.btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.btn-row button {
+  background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);
+  padding: 8px 16px; border-radius: 8px; font-size: 13.5px; font-weight: 600; cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.btn-row button:hover { filter: brightness(1.25); }
+.btn-row button.danger { background: rgba(255,92,108,.12); color: var(--err); border-color: var(--err); }
+
+.form-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.form-row.check { align-items: flex-start; }
+.form-row label { color: var(--dim); min-width: 90px; font-size: 13px; }
+.form-row select {
+  background: var(--bg-elev); color: var(--text); border: 1px solid var(--border);
+  padding: 6px 10px; border-radius: 6px; font-size: 13px;
+}
+.danger { color: var(--err); }
+
+.action { margin: 10px 0 0; font-size: 13px; }
+.action.working { color: var(--info); }
+.action.ok { color: var(--ok); }
+.action.err { color: var(--err); }

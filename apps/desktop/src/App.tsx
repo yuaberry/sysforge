@@ -3,6 +3,7 @@ import Dashboard from './pages/Dashboard';
 import DisksPage from './pages/DisksPage';
 import BootPage from './pages/BootPage';
 import DoctorPage from './pages/DoctorPage';
+import WindowsPage from './pages/WindowsPage';
 import Placeholder from './pages/Placeholder';
 
 interface NavItem {
@@ -15,6 +16,7 @@ const NAV_MAIN: NavItem[] = [
   { to: '/', label: 'Dashboard' },
   { to: '/discos', label: 'Discos' },
   { to: '/boot', label: 'Boot / UEFI' },
+  { to: '/windows', label: 'Instalar Windows 11' },
   { to: '/doctor', label: 'Diagnóstico' },
 ];
 
@@ -22,7 +24,6 @@ const NAV_PLANNED: Array<{ to: string; label: string; phase: number; desc: strin
   { to: '/instalacao', label: 'Modo de Instalação', phase: 2, desc: 'Express · Avançado · Automated · Recovery · Custom' },
   { to: '/imagem', label: 'Imagem ISO', phase: 3, desc: 'Seleção, download (netboot) e validação SHA-256' },
   { to: '/particionamento', label: 'Particionamento', phase: 4, desc: 'Plano GPT/MBR com pré-visualização e rollback' },
-  { to: '/windows', label: 'Identidade Windows', phase: 5, desc: 'Inject unattend, contas, chaves e drivers' },
   { to: '/pos-instalacao', label: 'Pós-instalação', phase: 6, desc: 'Scripts, aplicativos e configurações' },
   { to: '/drivers', label: 'Drivers', phase: 6, desc: 'SDI/Windows DevOps — offline injection' },
   { to: '/aplicativos', label: 'Aplicativos', phase: 6, desc: 'Pacotes declarativos pós-install' },
@@ -68,6 +69,7 @@ export default function App() {
           {NAV_PLANNED.map((item) => (
             <Route key={item.to} path={item.to} element={<Placeholder title={item.label} phase={item.phase} desc={item.desc} />} />
           ))}
+          <Route path="/windows" element={<WindowsPage />} />
         </Routes>
       </main>
     </div>

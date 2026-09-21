@@ -11,12 +11,29 @@ Rust + Tauri 2 + React. Linux UEFI nativo. Sem progresso falso, sem dados invent
 
 | Camada | Caminho | O que é |
 |---|---|---|
-| Núcleo | `core/` | Erros codificados (`YUA-XXX-NNN`), executor com classes de risco, state machine persistida, engines de hardware/disco/boot/UEFI, protocolo IPC |
-| Daemon | `daemon/` | `yua-osd` — a única porta privilegiada. Socket unix, `SO_PEERCRED`, auditoria JSONL, fail-closed para destrutivo |
-| CLI | `cli/` | `yua` — executável de terminal com efeitos (banner, spinner, tabelas, barras, badges) |
-| App desktop | `apps/desktop/` | Tauri 2 + React 18 — leitura in-process; escrita só via daemon |
-| Deploy | `deploy/systemd/` | Socket systemd, service com hardening, actions polkit |
-| Scripts | `scripts/` | `bootstrap-linux.sh` (deps do ambiente) e `install-daemon.sh` (modo sistema) |
+| Núcleo | `core/` | Erros codificados, executor com classes de risco + host-disk guard, state machine persistida, engines de hardware/disco/boot/UEFI, **controle de energia + reboot-direto-na-BIOS (OsIndications)**, **fluxo Windows 11 (checklist real, autounattend, mídia/Ventoy)**, protocolo IPC |
+| Daemon | `daemon/` | `yua-osd` — a única porta privilegiada. SO_PEERCRED, autorização polkit via **pkcheck** (diálogo de senha na tela), auditoria JSONL, fail-closed para destrutivo |
+| CLI | `cli/` | `yua` — terminal com efeitos: `status`, `disks`, `boot next/firmware/remove`, `power`, `winstall`, `doctor`, `daemon system` |
+| App desktop | `apps/desktop/` | Tauri 2 + React 18 — leitura in-process; ações privilegiadas via proxy ao daemon; página Windows 11 com controles reais |
+| Deploy | `deploy/systemd/` | Socket systemd, service com hardening, actions polkit com.yua.osd.* |
+| Scripts | `scripts/` | `bootstrap-linux.sh` (deps, com --check) e `install-daemon.sh` (modo sistema) |
+
+## Fluxo Windows 11 (real, ponta a ponta)
+
+```bash
+yua winstall                    # checklist honesto: UEFI, TPM/bypass, ISO, USB, Ventoy, daemon
+# conecte o pendrive Ventoy e coloque a ISO em ~/Downloads, depois:
+yua daemon system               # privilégio via polkit — sua senha na tela
+yua winstall --apply            # gera autounattend.xml (com bypass LabConfig) → copia ISO p/ Ventoy
+yua boot next                   # BootNext one-shot para a entrada USB do firmware (BootOrder intacto)
+yua power reboot --confirm      # o pendrive assume com o instalador do Windows 11
+```
+
+Limites físicos declarados: **após o reboot quem executa é o instalador do Windows** (com as respostas do autounattend). `yua boot firmware` reinicia direto na tela do BIOS via `OsIndications` — mecanismo UEFI oficial.
+
+## Privilégio sem senha solta
+
+Nada de sudo espalhado: o CLI/app sobem o daemon via `pkexec`, o **polkit pergunta a sua senha na tela** e o daemon só vê o veredito. Métodos de efeito real exigem `confirm:true` + snapshot prévio do estado UEFI.
 
 ## Início rápido
 

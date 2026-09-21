@@ -1,16 +1,12 @@
-//! `yua daemon` — consulta e executa o daemon yua-osd (IPC privilegiado).
-
 use std::path::PathBuf;
-
-use serde_json::json;
 
 use yua_core::error::{ErrorDomain, YuaError};
 use yua_core::executor::which;
-use yua_core::ipc::protocol::{DEFAULT_SYSTEM_SOCKET, METHOD_DAEMON_INFO, METHOD_ECHO};
-use yua_core::ipc::{dev_socket_default, YuaClient};
+use yua_core::ipc::client::YuaClient;
+use yua_core::ipc::protocol::DEFAULT_SYSTEM_SOCKET;
 
-use crate::ui::{self, paint};
 use crate::DaemonAction;
+use crate::ui::{self, paint};
 
 pub fn run(
     json: bool,
@@ -21,25 +17,28 @@ pub fn run(
     match action.unwrap_or(DaemonAction::Status) {
         DaemonAction::Status => status(json, color, socket),
         DaemonAction::Run => run_dev(socket),
+        DaemonAction::System => start_system(color),
     }
 }
 
 fn status(json: bool, color: bool, socket: Option<PathBuf>) -> Result<(), YuaError> {
     let candidates: Vec<PathBuf> = match socket {
         Some(s) => vec![s],
-        None => vec![dev_socket_default(), PathBuf::from(DEFAULT_SYSTEM_SOCKET)],
+        None => vec![
+            yua_core::ipc::dev_socket_default(),
+            PathBuf::from(DEFAULT_SYSTEM_SOCKET),
+        ],
     };
 
     for path in &candidates {
         if let Ok(mut client) = YuaClient::connect(path) {
-            // eco de sanidade + info do daemon
-            let pong = client.call(METHOD_ECHO, json!({"message": "cli"}))?;
+            let pong = client.call(yua_core::ipc::protocol::METHOD_ECHO, serde_json::json!({"message": "cli"}))?;
             let _ = pong;
-            let info = client.call(METHOD_DAEMON_INFO, json!({}))?;
+            let info = client.call(yua_core::ipc::protocol::METHOD_DAEMON_INFO, serde_json::json!({}))?;
             if json {
                 println!(
                     "{}",
-                    serde_json::to_string_pretty(&json!({"ok": true, "daemon": info, "socket": path.display().to_string()}))?
+                    serde_json::to_string_pretty(&serde_json::json!({"ok": true, "daemon": info, "socket": path.display().to_string()}))?
                 );
                 return Ok(());
             }
@@ -61,11 +60,15 @@ fn status(json: bool, color: bool, socket: Option<PathBuf>) -> Result<(), YuaErr
             kv("socket", path.display().to_string());
             println!();
             println!(
-                "  {} métodos v1: v1.echo · v1.system.info · v1.disks.list · v1.efi.entries · v1.capabilities · v1.daemon.info",
+                "  {} leitura: v1.echo · system.info · disks.list · efi.entries · capabilities · boot.snapshot",
                 ui::tag_info(color)
             );
             println!(
-                "  {} métodos destrutivos: RECUSADOS neste estágio ({})",
+                "  {} privilegiado (só system+polkit): boot.set_next/clear_next/remove_entry · reboot_to_firmware/arm_firmware · system.reboot/poweroff",
+                ui::tag_info(color)
+            );
+            println!(
+                "  {} destrutivo futuro: RECUSADO ({})",
                 ui::tag_fail(color),
                 paint("YUA-AUTH-002/004 — fail-closed", "red", color)
             );
@@ -80,33 +83,61 @@ fn status(json: bool, color: bool, socket: Option<PathBuf>) -> Result<(), YuaErr
     )
     .with_technical(format!(
         "sockets tentados: {}",
-        candidates
-            .iter()
-            .map(|p| p.display().to_string())
-            .collect::<Vec<_>>()
-            .join(", ")
+        candidates.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ")
     ))
     .with_recommendation(
-        "Para leitura, o CLI funciona sem daemon. Para subir o modo dev: `yua daemon run`. Para modo system (root): bash scripts/install-daemon.sh (systemd + polkit).",
+        "`yua daemon system` sobe com privilégio via polkit (sua senha). `yua daemon run` = modo dev somente leitura. Sistema completo: bash scripts/install-daemon.sh.",
     ))
 }
 
+/// Garante um daemon em modo SYSTEM rodando: conecta se já existir; senão
+/// sobe via pkexec — o polkit abre o diálogo de senha NA TELA do usuário.
+pub fn ensure_system_daemon(color: bool) -> Result<PathBuf, YuaError> {
+    println!(
+        "{} iniciando daemon em modo SISTEMA via pkexec…",
+        ui::tag_info(color)
+    );
+    println!(
+        "  {} AUTORIZE NO DIÁLOGO QUE VAI APARECER NA SUA TELA (senha do seu usuário)",
+        ui::tag_warn(color)
+    );
+    let sock = yua_core::ipc::system::ensure_system_daemon(
+        std::time::Duration::from_secs(90),
+        |s| {
+            use std::io::Write;
+            print!("\r  aguardando autorização… {s}s ");
+            std::io::stdout().flush().ok();
+        },
+    )?;
+    println!();
+    println!("{} daemon system pronto — privilégios liberados via polkit", ui::tag_ok(color));
+    Ok(sock)
+}
+
+fn start_system(color: bool) -> Result<(), YuaError> {
+    let sock = ensure_system_daemon(color)?;
+    let mut client = YuaClient::connect(&sock)?;
+    let info = client.call(yua_core::ipc::protocol::METHOD_DAEMON_INFO, serde_json::json!({}))?;
+    println!(
+        "  {} modo {} · pid {} · {}",
+        ui::tag_ok(color),
+        paint(info["mode"].as_str().unwrap_or("?"), "green", color),
+        info["pid"],
+        sock.display()
+    );
+    Ok(())
+}
+
 fn run_dev(socket: Option<PathBuf>) -> Result<(), YuaError> {
-    // Localiza o binário irmão (mesmo dir do executável yua) ou no PATH.
     let exe = std::env::current_exe()?;
-    let sibling = exe
+    let osd = exe
         .parent()
         .map(|d| d.join("yua-osd"))
-        .filter(|p| p.is_file());
-    let osd = sibling
+        .filter(|p| p.is_file())
         .or_else(|| which("yua-osd"))
         .ok_or_else(|| {
-            YuaError::new(
-                ErrorDomain::Dep,
-                3,
-                "Binário yua-osd não encontrado ao lado do `yua` nem no PATH",
-            )
-            .with_recommendation("Rode `cargo build --workspace` (o binário fica em target/debug/) ou instale o pacote completo.")
+            YuaError::new(ErrorDomain::Dep, 3, "Binário yua-osd não encontrado")
+                .with_recommendation("Rode `cargo build --workspace` (fica em target/debug/) ou build --release.")
         })?;
 
     println!("executando daemon dev: {} --dev", osd.display());

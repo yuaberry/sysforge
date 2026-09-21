@@ -16,7 +16,7 @@ use crate::error::YuaError;
 
 pub const PROTOCOL_VERSION: u32 = 1;
 
-// ---- Métodos v1 (todos read-only) ----
+// ---- Métodos v1 (read-only) ----
 pub const METHOD_ECHO: &str = "v1.echo";
 pub const METHOD_SYSTEM_INFO: &str = "v1.system.info";
 pub const METHOD_DISKS_LIST: &str = "v1.disks.list";
@@ -24,13 +24,44 @@ pub const METHOD_EFI_ENTRIES: &str = "v1.efi.entries";
 pub const METHOD_CAPABILITIES: &str = "v1.capabilities";
 pub const METHOD_DAEMON_INFO: &str = "v1.daemon.info";
 
-/// Métodos que UM DIA serão destrutivos. Na Fase 1 são recusados em TODOS
-/// os modos — o registro existe para o fail-closed ser explícito e testável.
+// ---- Métodos privilegiados v2 (implementados, exigem daemon system + polkit) ----
+/// BootNext one-shot (nunca toca BootOrder). Params: {entry_id, confirm:true}
+pub const METHOD_BOOT_SET_NEXT: &str = "v1.boot.set_next";
+/// Limpa um BootNext armado. Params: {confirm:true}
+pub const METHOD_BOOT_CLEAR_NEXT: &str = "v1.boot.clear_next";
+/// Remove entrada de boot (apenas entradas de disco/arquivo, com snapshot).
+/// Params: {entry_id, confirm:true}
+pub const METHOD_BOOT_REMOVE_ENTRY: &str = "v1.boot.remove_entry";
+/// Snapshot do estado UEFI (read-only, funciona em dev).
+pub const METHOD_BOOT_SNAPSHOT: &str = "v1.boot.snapshot";
+/// Reinicia direto na tela de setup do firmware (BIOS). Params: {confirm:true}
+pub const METHOD_BOOT_REBOOT_TO_FIRMWARE: &str = "v1.boot.reboot_to_firmware";
+/// Só arma OsIndications (próximo boot vai pra BIOS, sem reiniciar agora).
+/// Params: {confirm:true}
+pub const METHOD_BOOT_ARM_FIRMWARE: &str = "v1.boot.arm_firmware";
+/// Reboot imediato. Params: {confirm:true}
+pub const METHOD_SYSTEM_REBOOT: &str = "v1.system.reboot";
+/// Desligamento imediato. Params: {confirm:true}
+pub const METHOD_SYSTEM_POWEROFF: &str = "v1.system.poweroff";
+
+/// Métodos que exigem daemon em modo SISTEMA + autorização polkit
+/// (action com.yua.osd.lowrisk). Em modo dev são recusados (fail-closed).
+pub const PRIVILEGED_METHODS: &[&str] = &[
+    METHOD_BOOT_SET_NEXT,
+    METHOD_BOOT_CLEAR_NEXT,
+    METHOD_BOOT_REMOVE_ENTRY,
+    METHOD_BOOT_REBOOT_TO_FIRMWARE,
+    METHOD_BOOT_ARM_FIRMWARE,
+    METHOD_SYSTEM_REBOOT,
+    METHOD_SYSTEM_POWEROFF,
+];
+
+/// Métodos que serão destrutivos no futuro (wipe/format/deploy) — recusados
+/// em TODOS os modos até a Fase que os implementar com guard completo.
 pub const DESTRUCTIVE_REGISTRY: &[&str] = &[
     "v1.disk.wipe",
     "v1.disk.format",
     "v1.deploy.start",
-    "v1.boot.set_next",
 ];
 
 /// Socket do daemon em modo sistema (systemd socket activation).
@@ -160,8 +191,11 @@ mod tests {
 
     #[test]
     fn destructive_registry_is_declared() {
-        // O fail-closed da Fase 1 é contra ESTA lista — explícita e testável.
+        // O fail-closed é contra ESTAS listas — explícitas e testáveis.
         assert!(DESTRUCTIVE_REGISTRY.contains(&"v1.disk.wipe"));
-        assert!(DESTRUCTIVE_REGISTRY.contains(&"v1.boot.set_next"));
+        assert!(!DESTRUCTIVE_REGISTRY.contains(&"v1.boot.set_next"),
+            "set_next agora é privilegiado IMPLEMENTADO (LowRisk + polkit)");
+        assert!(PRIVILEGED_METHODS.contains(&METHOD_BOOT_SET_NEXT));
+        assert!(PRIVILEGED_METHODS.contains(&METHOD_SYSTEM_POWEROFF));
     }
 }
