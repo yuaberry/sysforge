@@ -13,7 +13,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
-VER="${1:-1.0.0}"
+VER="${1:-1.0.1}"
 REL="$ROOT/target/release"
 APP_REL="$ROOT/apps/desktop/src-tauri/target/release"
 OUT="$REL/yua-os-manager_${VER}_amd64.deb"

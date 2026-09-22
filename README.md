@@ -13,11 +13,11 @@
 ## ⬇ Download & Install (fácil)
 
 1. Abra **[Releases](https://github.com/yuaberry/yua-os-manager/releases)** neste repositório.
-2. Baixe o **`yua-os-manager_1.0.0_amd64.deb`** da release mais recente.
+2. Baixe o **`yua-os-manager_1.0.1_amd64.deb`** da release mais recente.
 3. Instale com dois cliques (instalador de pacotes do Mint/Ubuntu) ou no terminal:
 
 ```bash
-sudo apt install ./yua-os-manager_1.0.0_amd64.deb
+sudo apt install ./yua-os-manager_1.0.1_amd64.deb
 ```
 
 O `.deb` instala **tudo de uma vez**: app (menu "Sistema" → YUA OS MANAGER), CLI `yua`, daemon `yua-osd`, policy polkit e systemd com *socket activation* (o daemon sobe sozinho sob demanda).

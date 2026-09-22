@@ -4515,7 +4515,7 @@ dependencies = [
 
 [[package]]
 name = "yua-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "chrono",
  "libc",
@@ -4530,7 +4530,7 @@ dependencies = [
 
 [[package]]
 name = "yua-desktop"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "serde",
  "serde_json",

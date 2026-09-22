@@ -1,6 +1,6 @@
 [package]
 name = "yua-desktop"
-version = "1.0.0"
+version = "1.0.1"
 description = "YUA OS MANAGER — interface desktop (Tauri 2 + React)"
 authors = ["Yua Devs"]
 license = "MIT"
