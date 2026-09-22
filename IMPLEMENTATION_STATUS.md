@@ -168,3 +168,29 @@ verde (tsc + vite) · CLI funcional contra o hardware real.
 ---
 
 _Última atualização: Fase 1 concluída neste ambiente (workspace compilando, 35 testes verdes, CLI funcional com dados reais: WDC WD10SPZX serial WX61A79A2TDH, UEFI nativo, Secure Boot desabilitado, ESP 512 MiB restrita)._
+
+---
+
+# Release 1.0.0 — 21/09/2026 `[x]`
+
+## Concluído
+- [x] Fase 1: workspace, 50 testes reais, CLI funcional (validada em produção nesta máquina)
+- [x] Fase 2: energia (systemd-logind), reboot→BIOS via OsIndications (firmware suporta BOOT_TO_FIRMWARE_UI — testado), snapshot UEFI pré-mutação, fluxo `yua winstall` completo (checklist honesto 9 sondagens → autounattend.xml real com bypass LabConfig → BootNext one-shot)
+- [x] Daemon system validado ao vivo: pkexec + polkit autorizados pelo usuário (3×), SO_PEERCRED, auditoria JSONL
+- [x] App desktop Tauri 2 + React compilado e EXECUTANDO nesta máquina (Dashboard/Discos/Boot/Windows/Doctor)
+- [x] Fase 10: `.deb` único com app+CLI+daemon+policy polkit+systemd socket activation+menu+ícones (`scripts/package-deb.sh`)
+- [x] Docs completas (README/ARCHITECTURE/SECURITY/DEVELOPMENT), bootstrap e install scripts idempotentes
+
+## Lições de campo (causa raiz, não paliativo)
+- pkexec limpa o ambiente → executor com PATH determinístico (evita 127 em systemctl/efibootmgr/pkcheck)
+- pkcheck 127 = ação polkit desconhecida OU sem diálogo disponível → a policy com.yua.osd PRECISA estar instalada (install-daemon.sh / .deb postinst); mensagem YUA-AUTH-005 agora explica exatamente isso
+- Agente de diálogo polkit é pré-requisito para o APP (sem TTY): autostart + doctor check #11
+- App sem o handler registrado compila com warning — tratado como bug (unattend_save fora do generate_handler! → corrigido)
+
+## Pendências
+- [ ] Instalar o .deb na máquina-alvo (1 senha: `sudo apt install ~/Downloads/yua-os-manager_1.0.0_amd64.deb`) → valida yua doctor + socket activation
+- [ ] Publicar release no GitHub (gh auth login do usuário) → asset: yua-os-manager_1.0.0_amd64.deb (3.2 MB)
+- [ ] Download da ISO Win11 + pendrive Ventoy → `yua winstall` tudo verde → `--apply --full-wipe --reboot`
+- Fases 6/7/8/9 conforme roadmap (não bloqueiam 1.0.0)
+
+_Última atualização: Release 1.0.0 empacotada; app executando na máquina do usuário._

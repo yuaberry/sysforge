@@ -221,6 +221,7 @@ pub fn run() {
             ensure_system_daemon,
             windows_checklist,
             unattend_generate,
+            unattend_save,
             list_media,
             save_text_file
         ])
