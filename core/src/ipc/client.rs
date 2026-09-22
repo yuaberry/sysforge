@@ -18,7 +18,11 @@ impl IpcTimeout {
     fn duration(self) -> Duration {
         match self {
             IpcTimeout::Default => Duration::from_secs(30),
-            IpcTimeout::Long => Duration::from_secs(120),
+            // Privilegiado: pkcheck pode abrir o diálogo do polkit e esperar
+            // até 180s o usuário digitar a senha — o cliente precisa esperar
+            // MAIS que isso (bug real: cliente desistia em 30s com EAGAIN
+            // antes de o usuário conseguir responder o diálogo).
+            IpcTimeout::Long => Duration::from_secs(200),
         }
     }
 }
@@ -98,6 +102,24 @@ impl YuaClient {
                 .map(YuaError::from)
                 .unwrap_or_else(|| YuaError::new(ErrorDomain::Io, 9, "Erro sem detalhes")))
         }
+    }
+
+    /// Chama um método que pode abrir o diálogo de autorização do polkit
+    /// (privilegiados): usa timeout longo (200s) — o pkcheck espera até 180s
+    /// o usuário digitar a senha. Restaura o timeout padrão ao terminar.
+    pub fn call_interactive(
+        &mut self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value, YuaError> {
+        self.stream
+            .set_read_timeout(Some(IpcTimeout::Long.duration()))
+            .ok();
+        let r = self.call(method, params);
+        self.stream
+            .set_read_timeout(Some(IpcTimeout::Default.duration()))
+            .ok();
+        r
     }
 
     /// Echo de sanidade do protocolo.

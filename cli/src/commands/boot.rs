@@ -119,7 +119,7 @@ fn connect_system(color: bool) -> Result<(PathBuf, YuaClient), YuaError> {
 fn next(json: bool, color: bool, entry: Option<String>, clear: bool) -> Result<(), YuaError> {
     if clear {
         let (_, mut client) = connect_system(color)?;
-        let r = client.call(METHOD_BOOT_CLEAR_NEXT, json!({"confirm": true}))?;
+        let r = client.call_interactive(METHOD_BOOT_CLEAR_NEXT, json!({"confirm": true}))?;
         if json {
             println!("{}", serde_json::to_string_pretty(&r)?);
         } else if r["cleared"].as_bool().unwrap_or(true) {
@@ -150,7 +150,7 @@ fn next(json: bool, color: bool, entry: Option<String>, clear: bool) -> Result<(
     };
 
     let (_, mut client) = connect_system(color)?;
-    let r = client.call(METHOD_BOOT_SET_NEXT, json!({"entry_id": entry_id, "confirm": true}))?;
+    let r = client.call_interactive(METHOD_BOOT_SET_NEXT, json!({"entry_id": entry_id, "confirm": true}))?;
     if json {
         println!("{}", serde_json::to_string_pretty(&r)?);
         return Ok(());
@@ -183,7 +183,7 @@ fn firmware(json: bool, color: bool, arm_only: bool) -> Result<(), YuaError> {
     }
     let (_, mut client) = connect_system(color)?;
     if arm_only {
-        let r = client.call(METHOD_BOOT_ARM_FIRMWARE, json!({"confirm": true}))?;
+        let r = client.call_interactive(METHOD_BOOT_ARM_FIRMWARE, json!({"confirm": true}))?;
         if json {
             println!("{}", serde_json::to_string_pretty(&r)?);
         } else {
@@ -206,7 +206,7 @@ fn firmware(json: bool, color: bool, arm_only: bool) -> Result<(), YuaError> {
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
     let _ = std::io::stdout().flush();
-    let r = client.call(METHOD_BOOT_REBOOT_TO_FIRMWARE, json!({"confirm": true}))?;
+    let r = client.call_interactive(METHOD_BOOT_REBOOT_TO_FIRMWARE, json!({"confirm": true}))?;
     if json {
         println!("{}", serde_json::to_string_pretty(&r)?);
     } else {
@@ -247,7 +247,7 @@ fn remove(json: bool, color: bool, entry: String) -> Result<(), YuaError> {
     }
 
     let (_, mut client) = connect_system(color)?;
-    let r = client.call(METHOD_BOOT_REMOVE_ENTRY, json!({"entry_id": entry, "confirm": true}))?;
+    let r = client.call_interactive(METHOD_BOOT_REMOVE_ENTRY, json!({"entry_id": entry, "confirm": true}))?;
     if json {
         println!("{}", serde_json::to_string_pretty(&r)?);
         return Ok(());

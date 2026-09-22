@@ -106,7 +106,7 @@ fn get_capabilities() -> Value {
 fn daemon_call(method: String, params: Value) -> Result<Value, Value> {
     let sock = std::path::Path::new(DEFAULT_SYSTEM_SOCKET);
     let mut client = YuaClient::connect(sock).map_err(wire_err)?;
-    client.call(&method, params).map_err(wire_err)
+    client.call_interactive(&method, params).map_err(wire_err)
 }
 
 /// Sobe o daemon system via pkexec (polkit pede a senha NA TELA).

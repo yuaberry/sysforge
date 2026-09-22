@@ -132,7 +132,7 @@ fn start_system(color: bool) -> Result<(), YuaError> {
 fn stop_system(color: bool) -> Result<(), YuaError> {
     let sock = ensure_system_daemon(color)?;
     let mut client = YuaClient::connect(&sock)?;
-    let r = client.call(
+    let r = client.call_interactive(
         yua_core::ipc::protocol::METHOD_DAEMON_SHUTDOWN,
         serde_json::json!({ "confirm": true }),
     )?;

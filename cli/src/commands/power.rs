@@ -42,7 +42,7 @@ pub fn run(json: bool, color: bool, action: PowerAction, confirm: bool) -> Resul
     println!("  {} 1s…", paint("·", "dim", color));
     std::thread::sleep(std::time::Duration::from_secs(1));
 
-    let result = client.call(method, json!({ "confirm": true }))?;
+    let result = client.call_interactive(method, json!({ "confirm": true }))?;
     if json {
         println!("{}", serde_json::to_string_pretty(&result)?);
     } else {

@@ -188,7 +188,7 @@ pub fn run(json: bool, color: bool, opts: WinstallOpts) -> Result<(), YuaError> 
             Some(usb_id) => {
                 let sock = ensure_system_daemon(color)?;
                 let mut client = YuaClient::connect(&sock)?;
-                let r = client.call(METHOD_BOOT_SET_NEXT, json!({"entry_id": usb_id, "confirm": true}))?;
+                let r = client.call_interactive(METHOD_BOOT_SET_NEXT, json!({"entry_id": usb_id, "confirm": true}))?;
                 println!(
                     "  {} BootNext → {} ({}) — one-shot, BootOrder intacto",
                     ui::tag_ok(color),
@@ -221,7 +221,7 @@ pub fn run(json: bool, color: bool, opts: WinstallOpts) -> Result<(), YuaError> 
             println!("      {i}…");
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
-        let _ = client.call(METHOD_SYSTEM_REBOOT, json!({"confirm": true}))?;
+        let _ = client.call_interactive(METHOD_SYSTEM_REBOOT, json!({"confirm": true}))?;
     } else {
         println!(
             "\n  {} quando estiver pronto: `yua power reboot --confirm` (ou `yua winstall --apply --reboot`)",
