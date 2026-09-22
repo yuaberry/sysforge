@@ -144,6 +144,11 @@ fn handle(req: &Request, cfg: &Config, _peer: &Peer) -> Result<serde_json::Value
             require_confirm(req)?;
             let snap = BootSnapshot::capture(&exec)?;
             snap.save()?;
+            // Nada armado? BootNext limpo por natureza — não executa o
+            // --delete-bootnext (efibootmgr status 17 = "não existe" é ruído, não erro).
+            if snap.state.boot_next.is_none() {
+                return Ok(json!({ "cleared": false, "already_clean": true }));
+            }
             let spec = CommandSpec::new("efibootmgr")
                 .arg("--delete-bootnext")
                 .timeout(std::time::Duration::from_secs(20));

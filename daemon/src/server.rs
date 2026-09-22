@@ -110,8 +110,25 @@ fn prepare_socket(path: &Path, mode: DaemonMode) -> Result<UnixListener, YuaErro
     Ok(listener)
 }
 
+/// fd herdado do systemd (socket activation): LISTEN_PID=pid + LISTEN_FDS>=1 → fd 3.
+/// Sem isso, o daemon tentaria rebindar um socket que o systemd já segura (YUA-IO-010).
+fn systemd_listener() -> Option<UnixListener> {
+    let pid: u32 = std::env::var("LISTEN_PID").ok()?.parse().ok()?;
+    let fds: i32 = std::env::var("LISTEN_FDS").ok()?.parse().ok()?;
+    if pid == std::process::id() && fds >= 1 {
+        use std::os::fd::FromRawFd;
+        tracing::info!("socket activation systemd — usando fd herdado (3)");
+        Some(unsafe { UnixListener::from_raw_fd(3) })
+    } else {
+        None
+    }
+}
+
 pub fn serve(cfg: &Config) -> Result<(), YuaError> {
-    let listener = prepare_socket(&cfg.socket, cfg.mode)?;
+    let listener = match systemd_listener() {
+        Some(l) => l, // systemd: socket já criado e com perms corretas (unit SocketMode)
+        None => prepare_socket(&cfg.socket, cfg.mode)?,
+    };
     tracing::info!(socket = %cfg.socket.display(), mode = cfg.mode.label(), "aguardando conexões IPC");
 
     for stream in listener.incoming() {

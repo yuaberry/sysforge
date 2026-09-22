@@ -122,8 +122,10 @@ fn next(json: bool, color: bool, entry: Option<String>, clear: bool) -> Result<(
         let r = client.call(METHOD_BOOT_CLEAR_NEXT, json!({"confirm": true}))?;
         if json {
             println!("{}", serde_json::to_string_pretty(&r)?);
-        } else {
+        } else if r["cleared"].as_bool().unwrap_or(true) {
             println!("  {} BootNext cancelado — o boot seguirá o BootOrder normal", ui::tag_ok(color));
+        } else {
+            println!("  {} Nada estava armado — BootNext já estava limpo", ui::tag_ok(color));
         }
         return Ok(());
     }
