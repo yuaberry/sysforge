@@ -63,7 +63,7 @@ bash scripts/package-deb.sh      # gera o sysforge_amd64.deb
 cargo test --workspace           # 50 testes
 ```
 
-Site: [`website/`](website/) — GitHub Pages (HTML/CSS/JS puro, sem dependências).
+Site: [`docs/index.html`](docs/index.html) — GitHub Pages (HTML/CSS/JS puro, sem dependências) (HTML/CSS/JS puro, sem dependências).
 
 ## Licença
 
