@@ -1,31 +1,31 @@
-//! `yua power reboot|off` — energia via daemon system (polkit autoriza na tela).
+//! `sysforge power reboot|off` — energia via daemon system (polkit autoriza na tela).
 
 use std::path::PathBuf;
 
 use serde_json::json;
 
-use yua_core::error::YuaError;
-use yua_core::ipc::client::YuaClient;
-use yua_core::ipc::protocol::{METHOD_SYSTEM_POWEROFF, METHOD_SYSTEM_REBOOT};
+use sysforge_core::error::SysforgeError;
+use sysforge_core::ipc::client::YuaClient;
+use sysforge_core::ipc::protocol::{METHOD_SYSTEM_POWEROFF, METHOD_SYSTEM_REBOOT};
 
 use crate::commands::daemon::ensure_system_daemon;
 use crate::ui::{self, paint};
 
 use crate::PowerAction;
 
-pub fn run(json: bool, color: bool, action: PowerAction, confirm: bool) -> Result<(), YuaError> {
+pub fn run(json: bool, color: bool, action: PowerAction, confirm: bool) -> Result<(), SysforgeError> {
     let (method, label) = match action {
         PowerAction::Reboot => (METHOD_SYSTEM_REBOOT, "reiniciar"),
         PowerAction::Off => (METHOD_SYSTEM_POWEROFF, "desligar"),
     };
 
     if !confirm {
-        let e = YuaError::new(
-            yua_core::error::ErrorDomain::Auth,
+        let e = SysforgeError::new(
+            sysforge_core::error::ErrorDomain::Auth,
             6,
             format!("Use --confirm para {label} agora"),
         )
-        .with_recommendation(format!("`yua power {} --confirm` — ação imediata e sem prompt.", match action { PowerAction::Reboot => "reboot", PowerAction::Off => "off" }));
+        .with_recommendation(format!("`sysforge power {} --confirm` — ação imediata e sem prompt.", match action { PowerAction::Reboot => "reboot", PowerAction::Off => "off" }));
         if json {
             println!("{}", serde_json::json!({"ok": false, "error": {"code": e.code, "message": e.message}}));
         }

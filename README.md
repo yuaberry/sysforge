@@ -1,54 +1,57 @@
-# YUA OS MANAGER
+# SYSFORGE
 
-> Gerenciador de sistema desktop (Linux) com **fluxo completo de migração para o Windows 11** — do diagnóstico à BIOS, com operações privilegiadas auditadas via polkit.
+> Troque de sistema operacional sem medo — inclusive em computador antigo.
+
+O **Sysforge** nasceu para quem quer mudar de SO e não sabe por onde começar: um assistente desktop (Linux) que **diagnostica, prepara a mídia, guarda as respostas da instalação e reinicia a máquina direto no instalador** — com autorização auditada a cada passo.
 
 | Componente | O que é |
 |---|---|
-| **App desktop** | Tauri 2 + React/TypeScript — Dashboard, Discos, Boot/UEFI, Windows 11, Doctor |
-| **CLI `yua`** | Mesma engine, com efeitos (spinner, tabelas, badges) e `--json` |
-| **Daemon `yua-osd`** | IPC NDJSON em Unix socket, SO_PEERCRED, **polkit** para qualquer ação privilegiada |
+| **App desktop** | Tauri 2 + React — Dashboard, Discos, Boot/UEFI, **Instalar Sistema**, Doctor |
+| **CLI `sysforge`** | A mesma engine, com `--json` para scripts |
+| **Daemon `sysforge-osd`** | IPC Unix socket, SO_PEERCRED, **polkit** para toda ação privilegiada |
 
----
+## ⬇ Download
 
-## ⬇ Download & Install (fácil)
+**Site oficial (recomendado):** <https://yuaberry.github.io/sysforge/> — detecta seu sistema e baixa o pacote certo.
 
-1. Abra **[Releases](https://github.com/yuaberry/yua-os-manager/releases)** neste repositório.
-2. Baixe o **`yua-os-manager_1.0.1_amd64.deb`** da release mais recente.
-3. Instale com dois cliques (instalador de pacotes do Mint/Ubuntu) ou no terminal:
+Ou direto do GitHub:
 
-```bash
-sudo apt install ./yua-os-manager_1.0.1_amd64.deb
-```
+- **Linux (.deb — Ubuntu 20.04+/Mint 20+):** [`sysforge_amd64.deb`](https://github.com/yuaberry/sysforge/releases/latest/download/sysforge_amd64.deb)
+- Todas as releases: [github.com/yuaberry/sysforge/releases](https://github.com/yuaberry/sysforge/releases)
 
-O `.deb` instala **tudo de uma vez**: app (menu "Sistema" → YUA OS MANAGER), CLI `yua`, daemon `yua-osd`, policy polkit e systemd com *socket activation* (o daemon sobe sozinho sob demanda).
-
-**Validação pós-install:**
+Instalação (um pacote instala **tudo** — app, CLI, daemon, policy polkit, systemd):
 
 ```bash
-yua doctor        # 11 verificações reais do seu ambiente
-yua daemon status # deve responder: modo system (via socket)
+sudo apt install ./sysforge_amd64.deb
 ```
 
-> Requisitos: Linux x86_64 com GTK3/WebKitGTK 4.1 (Mint 21+/Ubuntu 22.04+). Para compilar do código, veja [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+Depois de instalar, valide seu ambiente:
 
----
+```bash
+sysforge doctor         # diagnóstico honesto do seu ambiente
+sysforge daemon status  # deve responder: modo system (via socket)
+```
 
-## O que ele faz
+## Para quem é
 
-- **Discos** — inventário real via `lsblk`/`udev`/`blkid`, serial, modelo, SMART honesto (avisa se `smartctl` não existe em vez de inventar dado), detecção do disco do sistema com guarda irreversível (`YUA-DISK-010`).
-- **Boot / UEFI** — lista e classifica entradas (mortas, internas do firmware, removíveis), snapshot `efibootmgr -v` antes de qualquer mutação, **BootNext one-shot** (nunca reescreve BootOrder), reboot direto na BIOS via `OsIndications` (testado em firmware que suporta `BOOT_TO_FIRMWARE_UI`).
-- **Windows 11** — checklist honesto com 9 sondagens reais (TPM/CPU/Secure Boot/ESP/mídia/ISO/Ventoy), gerador de `autounattend.xml` (com bypass LabConfig para hardware antigo, chaves genéricas Pro/Home), copiador de ISO para pendrive Ventoy com progresso, e o fluxo final: `yua winstall --apply` → armadilha de confirmação (`APAGAR`) → reboot para o instalador.
-- **Doctor** — 11 verificações de ambiente (deps, polkit agent, permissões ESP, smartctl…).
-- **Energia** — reboot/desligamento reais via systemd-logind, sempre com `--confirm` explícito.
+- **Quem nunca instalou um SO** — o checklist mostra o que falta (ISO, pendrive, BIOS) e o fluxo guiado cuida do resto.
+- **Computador antigo** — o Windows 11 exige TPM 2.0 e CPU recente; o Sysforge detecta isso e inclui o **bypass de hardware no autounattend** (LabConfig), deixando você decidir com informação honesta.
+- **Quem já sabe, mas quer segurança** — snapshot UEFI antes de qualquer mutação, BootNext one-shot (nunca reescreve o BootOrder), auditoria de cada ação privilegiada.
 
-## Segurança (o projeto inteiro foi desenhado em torno disso)
+## O que ele faz hoje
 
-- **Fail-closed**: sem daemon, nada privilegiado roda. Daemon em modo **dev** recusa métodos privilegiados (`YUA-AUTH-002`).
-- **Toda ação de efeito exige `confirm: true`** no protocolo — não existe mutação acidental.
-- **Polkit por ação** (`com.yua.osd.lowrisk`), checando `pid+starttime` do cliente (não aceita pid reciclado).
-- **Destrutivo** (wipe/format/deploy real): **sempre recusado** — só existirá atrás de plano+rollback validados em QEMU.
-- **Auditoria JSONL** de cada decisão (permitida ou negada) em `/var/lib/yua-os-manager/audit.jsonl`.
-- Erros codificados (`YUA-{DISK,BOOT,UEFI,AUTH,DEP,STATE}-NNN`) com causa técnica + recomendação.
+- **Instalar Windows 11** (fluxo completo): checklist real com 9 sondagens → geração de `autounattend.xml` (respostas da instalação + bypass LabConfig) → cópia da ISO para pendrive Ventoy com progresso → **BootNext one-shot** → reboot direto no instalador. Um clique, ou `sysforge install --apply`.
+- **Ubuntu/Mint e outros**: a engenharia de mídia/checklist já é agnóstica de SO; o fluxo guiado por distro está no roadmap (`sysforge install --target ubuntu` → avisa honestamente o estado).
+- **Discos**: inventário real (`lsblk`/`udev`/`blkid`), serial, SMART honesto, guarda irreversível do disco do sistema (`SF-DISK-010`).
+- **Boot/UEFI**: classifica entradas (mortas, internas, removíveis), snapshot antes de mutações, reboot direto na BIOS via `OsIndications`.
+- **Doctor**: 11 verificações de ambiente, incluindo agente de diálogo polkit e headers de build.
+
+## Segurança
+
+- **Fail-closed**: sem daemon, nada privilegiado roda; modo dev recusa métodos privilegiados.
+- **Destrutivo sempre recusado** (wipe/format) — só existirá validado em QEMU com plano+rollback.
+- Toda mutação exige `confirm:true` + polkit por ação (`pid+starttime`) + snapshot prévio + auditoria JSONL.
+- Códigos de erro `SF-XXX-NNN` com causa técnica + recomendação em cada um.
 
 Detalhes: [`docs/SECURITY.md`](docs/SECURITY.md) · Arquitetura: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
@@ -56,9 +59,11 @@ Detalhes: [`docs/SECURITY.md`](docs/SECURITY.md) · Arquitetura: [`docs/ARCHITEC
 
 ```bash
 bash scripts/bootstrap-linux.sh   # deps + compila TUDO (workspace, testes, app)
-bash scripts/package-deb.sh      # gera o .deb completo
+bash scripts/package-deb.sh      # gera o sysforge_amd64.deb
 cargo test --workspace           # 50 testes
 ```
+
+Site: [`website/`](website/) — GitHub Pages (HTML/CSS/JS puro, sem dependências).
 
 ## Licença
 

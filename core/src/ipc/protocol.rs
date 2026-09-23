@@ -1,4 +1,4 @@
-//! Protocolo IPC do daemon `yua-osd`: NDJSON (uma mensagem JSON por linha)
+//! Protocolo IPC do daemon `sysforge-osd`: NDJSON (uma mensagem JSON por linha)
 //! sobre Unix socket. Versão v1, métodos read-only.
 //!
 //! Regras de segurança:
@@ -6,13 +6,13 @@
 //!   em nada que o cliente envie).
 //! - Modo dev: mesmo uid ⇒ read-only OK; destrutivo recusado (fail-closed).
 //! - Modo sistema: autorização por método via polkit (pkcheck).
-//! - Erros carregam código YUA-XXX-NNN — nada de "erro genérico".
+//! - Erros carregam código SF-XXX-NNN — nada de "erro genérico".
 
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::YuaError;
+use crate::error::SysforgeError;
 
 pub const PROTOCOL_VERSION: u32 = 1;
 
@@ -48,7 +48,7 @@ pub const METHOD_SYSTEM_POWEROFF: &str = "v1.system.poweroff";
 pub const METHOD_DAEMON_SHUTDOWN: &str = "v1.daemon.shutdown";
 
 /// Métodos que exigem daemon em modo SISTEMA + autorização polkit
-/// (action com.yua.osd.lowrisk). Em modo dev são recusados (fail-closed).
+/// (action com.sysforge.osd.lowrisk). Em modo dev são recusados (fail-closed).
 pub const PRIVILEGED_METHODS: &[&str] = &[
     METHOD_BOOT_SET_NEXT,
     METHOD_BOOT_CLEAR_NEXT,
@@ -69,14 +69,14 @@ pub const DESTRUCTIVE_REGISTRY: &[&str] = &[
 ];
 
 /// Socket do daemon em modo sistema (systemd socket activation).
-pub const DEFAULT_SYSTEM_SOCKET: &str = "/run/yua-osd.sock";
+pub const DEFAULT_SYSTEM_SOCKET: &str = "/run/sysforge-osd.sock";
 
-/// Socket dev padrão: $XDG_RUNTIME_DIR/yua-osd.dev.sock (ou /tmp).
+/// Socket dev padrão: $XDG_RUNTIME_DIR/sysforge-osd.dev.sock (ou /tmp).
 pub fn dev_socket_default() -> PathBuf {
     if let Some(xdg) = std::env::var_os("XDG_RUNTIME_DIR") {
-        PathBuf::from(xdg).join("yua-osd.dev.sock")
+        PathBuf::from(xdg).join("sysforge-osd.dev.sock")
     } else {
-        PathBuf::from("/tmp").join(format!("yua-osd.dev.{}.sock", std::env::var("UID").unwrap_or_else(|_| "0".into())))
+        PathBuf::from("/tmp").join(format!("sysforge-osd.dev.{}.sock", std::env::var("UID").unwrap_or_else(|_| "0".into())))
     }
 }
 
@@ -98,8 +98,8 @@ pub struct WireError {
     pub recommendation: String,
 }
 
-impl From<YuaError> for WireError {
-    fn from(e: YuaError) -> Self {
+impl From<SysforgeError> for WireError {
+    fn from(e: SysforgeError) -> Self {
         Self {
             code: e.code,
             message: e.message,
@@ -109,7 +109,7 @@ impl From<YuaError> for WireError {
     }
 }
 
-impl From<WireError> for YuaError {
+impl From<WireError> for SysforgeError {
     fn from(e: WireError) -> Self {
         Self {
             code: e.code,
@@ -159,7 +159,7 @@ pub struct Event {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::{ErrorDomain, YuaError};
+    use crate::error::{ErrorDomain, SysforgeError};
 
     #[test]
     fn request_response_roundtrip() {
@@ -184,12 +184,12 @@ mod tests {
 
     #[test]
     fn wire_error_maps_both_ways() {
-        let e = YuaError::new(ErrorDomain::Auth, 2, "destrutivo recusado")
+        let e = SysforgeError::new(ErrorDomain::Auth, 2, "destrutivo recusado")
             .with_recommendation("use o daemon em modo sistema");
         let w: WireError = e.clone().into();
-        assert_eq!(w.code, "YUA-AUTH-002");
-        let back: YuaError = w.into();
-        assert_eq!(back.code, "YUA-AUTH-002");
+        assert_eq!(w.code, "SF-AUTH-002");
+        let back: SysforgeError = w.into();
+        assert_eq!(back.code, "SF-AUTH-002");
         assert_eq!(back.recommendation, "use o daemon em modo sistema");
     }
 

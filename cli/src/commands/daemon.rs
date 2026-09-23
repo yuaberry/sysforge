@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
-use yua_core::error::{ErrorDomain, YuaError};
-use yua_core::executor::which;
-use yua_core::ipc::client::YuaClient;
-use yua_core::ipc::protocol::DEFAULT_SYSTEM_SOCKET;
+use sysforge_core::error::{ErrorDomain, SysforgeError};
+use sysforge_core::executor::which;
+use sysforge_core::ipc::client::YuaClient;
+use sysforge_core::ipc::protocol::DEFAULT_SYSTEM_SOCKET;
 
 use crate::DaemonAction;
 use crate::ui::{self, paint};
@@ -13,7 +13,7 @@ pub fn run(
     color: bool,
     action: Option<DaemonAction>,
     socket: Option<PathBuf>,
-) -> Result<(), YuaError> {
+) -> Result<(), SysforgeError> {
     match action.unwrap_or(DaemonAction::Status) {
         DaemonAction::Status => status(json, color, socket),
         DaemonAction::Run => run_dev(socket),
@@ -22,20 +22,20 @@ pub fn run(
     }
 }
 
-fn status(json: bool, color: bool, socket: Option<PathBuf>) -> Result<(), YuaError> {
+fn status(json: bool, color: bool, socket: Option<PathBuf>) -> Result<(), SysforgeError> {
     let candidates: Vec<PathBuf> = match socket {
         Some(s) => vec![s],
         None => vec![
-            yua_core::ipc::dev_socket_default(),
+            sysforge_core::ipc::dev_socket_default(),
             PathBuf::from(DEFAULT_SYSTEM_SOCKET),
         ],
     };
 
     for path in &candidates {
         if let Ok(mut client) = YuaClient::connect(path) {
-            let pong = client.call(yua_core::ipc::protocol::METHOD_ECHO, serde_json::json!({"message": "cli"}))?;
+            let pong = client.call(sysforge_core::ipc::protocol::METHOD_ECHO, serde_json::json!({"message": "cli"}))?;
             let _ = pong;
-            let info = client.call(yua_core::ipc::protocol::METHOD_DAEMON_INFO, serde_json::json!({}))?;
+            let info = client.call(sysforge_core::ipc::protocol::METHOD_DAEMON_INFO, serde_json::json!({}))?;
             if json {
                 println!(
                     "{}",
@@ -44,7 +44,7 @@ fn status(json: bool, color: bool, socket: Option<PathBuf>) -> Result<(), YuaErr
                 return Ok(());
             }
             ui::banner(color);
-            println!("  {} daemon yua-osd ativo", ui::tag_ok(color));
+            println!("  {} daemon sysforge-osd ativo", ui::tag_ok(color));
             let kv = |k: &str, v: String| {
                 println!("  {} {}", paint(&format!("{:<12}", k), "dim", color), v);
             };
@@ -71,29 +71,29 @@ fn status(json: bool, color: bool, socket: Option<PathBuf>) -> Result<(), YuaErr
             println!(
                 "  {} destrutivo futuro: RECUSADO ({})",
                 ui::tag_fail(color),
-                paint("YUA-AUTH-002/004 — fail-closed", "red", color)
+                paint("SF-AUTH-002/004 — fail-closed", "red", color)
             );
             return Ok(());
         }
     }
 
-    Err(YuaError::new(
+    Err(SysforgeError::new(
         ErrorDomain::Io,
         5,
-        "Nenhum daemon yua-osd está respondendo",
+        "Nenhum daemon sysforge-osd está respondendo",
     )
     .with_technical(format!(
         "sockets tentados: {}",
         candidates.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ")
     ))
     .with_recommendation(
-        "`yua daemon system` sobe com privilégio via polkit (sua senha). `yua daemon run` = modo dev somente leitura. Sistema completo: bash scripts/install-daemon.sh.",
+        "`sysforge daemon system` sobe com privilégio via polkit (sua senha). `sysforge daemon run` = modo dev somente leitura. Sistema completo: bash scripts/install-daemon.sh.",
     ))
 }
 
 /// Garante um daemon em modo SYSTEM rodando: conecta se já existir; senão
 /// sobe via pkexec — o polkit abre o diálogo de senha NA TELA do usuário.
-pub fn ensure_system_daemon(color: bool) -> Result<PathBuf, YuaError> {
+pub fn ensure_system_daemon(color: bool) -> Result<PathBuf, SysforgeError> {
     println!(
         "{} iniciando daemon em modo SISTEMA via pkexec…",
         ui::tag_info(color)
@@ -102,7 +102,7 @@ pub fn ensure_system_daemon(color: bool) -> Result<PathBuf, YuaError> {
         "  {} AUTORIZE NO DIÁLOGO QUE VAI APARECER NA SUA TELA (senha do seu usuário)",
         ui::tag_warn(color)
     );
-    let sock = yua_core::ipc::system::ensure_system_daemon(
+    let sock = sysforge_core::ipc::system::ensure_system_daemon(
         std::time::Duration::from_secs(90),
         |s| {
             use std::io::Write;
@@ -115,10 +115,10 @@ pub fn ensure_system_daemon(color: bool) -> Result<PathBuf, YuaError> {
     Ok(sock)
 }
 
-fn start_system(color: bool) -> Result<(), YuaError> {
+fn start_system(color: bool) -> Result<(), SysforgeError> {
     let sock = ensure_system_daemon(color)?;
     let mut client = YuaClient::connect(&sock)?;
-    let info = client.call(yua_core::ipc::protocol::METHOD_DAEMON_INFO, serde_json::json!({}))?;
+    let info = client.call(sysforge_core::ipc::protocol::METHOD_DAEMON_INFO, serde_json::json!({}))?;
     println!(
         "  {} modo {} · pid {} · {}",
         ui::tag_ok(color),
@@ -129,11 +129,11 @@ fn start_system(color: bool) -> Result<(), YuaError> {
     Ok(())
 }
 
-fn stop_system(color: bool) -> Result<(), YuaError> {
+fn stop_system(color: bool) -> Result<(), SysforgeError> {
     let sock = ensure_system_daemon(color)?;
     let mut client = YuaClient::connect(&sock)?;
     let r = client.call_interactive(
-        yua_core::ipc::protocol::METHOD_DAEMON_SHUTDOWN,
+        sysforge_core::ipc::protocol::METHOD_DAEMON_SHUTDOWN,
         serde_json::json!({ "confirm": true }),
     )?;
     println!(
@@ -144,15 +144,15 @@ fn stop_system(color: bool) -> Result<(), YuaError> {
     Ok(())
 }
 
-fn run_dev(socket: Option<PathBuf>) -> Result<(), YuaError> {
+fn run_dev(socket: Option<PathBuf>) -> Result<(), SysforgeError> {
     let exe = std::env::current_exe()?;
     let osd = exe
         .parent()
-        .map(|d| d.join("yua-osd"))
+        .map(|d| d.join("sysforge-osd"))
         .filter(|p| p.is_file())
-        .or_else(|| which("yua-osd"))
+        .or_else(|| which("sysforge-osd"))
         .ok_or_else(|| {
-            YuaError::new(ErrorDomain::Dep, 3, "Binário yua-osd não encontrado")
+            SysforgeError::new(ErrorDomain::Dep, 3, "Binário sysforge-osd não encontrado")
                 .with_recommendation("Rode `cargo build --workspace` (fica em target/debug/) ou build --release.")
         })?;
 

@@ -1,19 +1,19 @@
-//! `yua doctor` — diagnóstico completo do ambiente com instruções EXATAS de
+//! `sysforge doctor` — diagnóstico completo do ambiente com instruções EXATAS de
 //! correção. Cada verificação roda com spinner e resultado honesto: o que
-//! falta é reportado com código (YUA-DEP-NNN) e o comando apt correspondente.
+//! falta é reportado com código (SF-DEP-NNN) e o comando apt correspondente.
 
 use std::path::PathBuf;
 
-use yua_core::boot::efi::read_efi_state;
-use yua_core::boot::esp::read_esp;
-use yua_core::capability::probe_capabilities;
-use yua_core::disk::identity::DiskIdentity;
-use yua_core::error::YuaError;
-use yua_core::executor::{disk_of_partition, host_root_disk, Executor};
-use yua_core::hw::system::probe_system_info;
-use yua_core::ipc::protocol::{DEFAULT_SYSTEM_SOCKET, METHOD_DAEMON_INFO};
-use yua_core::ipc::{dev_socket_default, YuaClient};
-use yua_core::Availability;
+use sysforge_core::boot::efi::read_efi_state;
+use sysforge_core::boot::esp::read_esp;
+use sysforge_core::capability::probe_capabilities;
+use sysforge_core::disk::identity::DiskIdentity;
+use sysforge_core::error::SysforgeError;
+use sysforge_core::executor::{disk_of_partition, host_root_disk, Executor};
+use sysforge_core::hw::system::probe_system_info;
+use sysforge_core::ipc::protocol::{DEFAULT_SYSTEM_SOCKET, METHOD_DAEMON_INFO};
+use sysforge_core::ipc::{dev_socket_default, YuaClient};
+use sysforge_core::Availability;
 
 use crate::ui::{self, paint};
 
@@ -75,7 +75,7 @@ fn daemon_state() -> Option<(String, serde_json::Value)> {
     None
 }
 
-pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
+pub fn run(json: bool, color: bool) -> Result<(), SysforgeError> {
     let exec = Executor::default();
     let caps = probe_capabilities();
     let sys = probe_system_info();
@@ -149,7 +149,7 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
             },
             None => Finding {
                 status: Status::Warn,
-                detail: "UEFI nativo · valor de Secure Boot ilegível (YUA-UEFI-001)".into(),
+                detail: "UEFI nativo · valor de Secure Boot ilegível (SF-UEFI-001)".into(),
             },
         }
     }));
@@ -160,7 +160,7 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
         if !esp.mounted {
             return Finding {
                 status: Status::Fail,
-                detail: "não montada — YUA-BOOT-002: instalação UEFI indisponível".into(),
+                detail: "não montada — SF-BOOT-002: instalação UEFI indisponível".into(),
             };
         }
         if esp.free_bytes < 32 * 1024 * 1024 {
@@ -205,7 +205,7 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
                 Finding {
                     status: Status::Ok,
                     detail: format!(
-                        "{} em {} · serial {} — guard de disco vivo armado (YUA-DISK-010)",
+                        "{} em {} · serial {} — guard de disco vivo armado (SF-DISK-010)",
                         disk, root, serial
                     ),
                 }
@@ -237,7 +237,7 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
 
     // 7 — daemon
     let daemon = daemon_state();
-    findings.push(check("daemon yua-osd", color, || {
+    findings.push(check("daemon sysforge-osd", color, || {
         match &daemon {
             Some((sock, info)) => Finding {
                 status: Status::Ok,
@@ -278,7 +278,7 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
         } else {
             Finding {
                 status: Status::Warn,
-                detail: "smartctl ausente — YUA-DEP-005: `yua disks` reporta SMART como indisponível (honesto)".into(),
+                detail: "smartctl ausente — SF-DEP-005: `sysforge disks` reporta SMART como indisponível (honesto)".into(),
             }
         }
     }));
@@ -301,7 +301,7 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
     // 11 — agente de diálogo polkit (senhas na tela para o APP)
     findings.push(check("agente de diálogo polkit", color, || {
         let has_pk = caps.tools.iter().any(|t| t.name == "pkexec" && t.found);
-        let agent = yua_core::capability::polkit_dialog_agent_present();
+        let agent = sysforge_core::capability::polkit_dialog_agent_present();
         match (has_pk, agent) {
             (true, true) => Finding {
                 status: Status::Ok,
@@ -351,7 +351,7 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
     ));
     if daemon.is_none() {
         next.push(String::from(
-            "Subir o daemon dev (somente leitura): yua daemon run",
+            "Subir o daemon dev (somente leitura): sysforge daemon run",
         ));
     }
     if !next.is_empty() {

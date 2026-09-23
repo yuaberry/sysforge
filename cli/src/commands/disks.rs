@@ -1,16 +1,16 @@
-//! `yua disks` — inventário de blocos com dados reais (lsblk + udev) e
+//! `sysforge disks` — inventário de blocos com dados reais (lsblk + udev) e
 //! saúde honesta (SMART declarado como indisponível quando smartctl falta).
 
-use yua_core::disk::lsblk::list_blockdevices;
-use yua_core::disk::smart::smart_health;
-use yua_core::disk::udev::enrich_from_udev;
-use yua_core::error::YuaError;
-use yua_core::executor::Executor;
-use yua_core::Availability;
+use sysforge_core::disk::lsblk::list_blockdevices;
+use sysforge_core::disk::smart::smart_health;
+use sysforge_core::disk::udev::enrich_from_udev;
+use sysforge_core::error::SysforgeError;
+use sysforge_core::executor::Executor;
+use sysforge_core::Availability;
 
 use crate::ui::{self, paint};
 
-pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
+pub fn run(json: bool, color: bool) -> Result<(), SysforgeError> {
     let exec = Executor::default();
     let mut devs = list_blockdevices(&exec)?;
     for d in devs.iter_mut() {
@@ -114,7 +114,7 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
 
     println!();
     println!(
-        "  {} host-disk guard ATIVO: operações destrutivas no disco do sistema vivo são recusadas por código (YUA-DISK-010).",
+        "  {} host-disk guard ATIVO: operações destrutivas no disco do sistema vivo são recusadas por código (SF-DISK-010).",
         ui::tag_ok(color)
     );
     Ok(())

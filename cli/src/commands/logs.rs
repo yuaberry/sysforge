@@ -1,18 +1,18 @@
-//! `yua logs` — últimas linhas do log do YUA + onde ficam os de auditoria.
+//! `sysforge logs` — últimas linhas do log do SYSFORGE + onde ficam os de auditoria.
 
 use std::fs;
 
-use yua_core::error::{ErrorDomain, YuaError};
-use yua_core::logging;
+use sysforge_core::error::{ErrorDomain, SysforgeError};
+use sysforge_core::logging;
 
 use crate::ui::paint;
 
-pub fn run(json: bool, color: bool, lines: usize) -> Result<(), YuaError> {
+pub fn run(json: bool, color: bool, lines: usize) -> Result<(), SysforgeError> {
     let Some(path) = logging::default_app_log_file() else {
-        return Err(YuaError::new(ErrorDomain::Io, 2, "HOME não definido"));
+        return Err(SysforgeError::new(ErrorDomain::Io, 2, "HOME não definido"));
     };
     let audit_dev = std::env::var_os("HOME")
-        .map(|h| format!("{}/.local/share/yua-os-manager/logs/audit.jsonl", h.to_string_lossy()))
+        .map(|h| format!("{}/.local/share/sysforge/logs/audit.jsonl", h.to_string_lossy()))
         .unwrap_or_default();
 
     if !path.exists() {
@@ -25,7 +25,7 @@ pub fn run(json: bool, color: bool, lines: usize) -> Result<(), YuaError> {
         } else {
             println!("{msg}");
             println!("Auditoria (daemon dev):   {audit_dev}");
-            println!("Auditoria (daemon system): /var/lib/yua-os-manager/audit.jsonl");
+            println!("Auditoria (daemon system): /var/lib/sysforge/audit.jsonl");
         }
         return Ok(());
     }
@@ -61,6 +61,6 @@ pub fn run(json: bool, color: bool, lines: usize) -> Result<(), YuaError> {
     println!();
     println!("{}", paint("Auditoria do daemon:", "dim", color));
     println!("  dev:    {audit_dev}");
-    println!("  system: /var/lib/yua-os-manager/audit.jsonl");
+    println!("  system: /var/lib/sysforge/audit.jsonl");
     Ok(())
 }

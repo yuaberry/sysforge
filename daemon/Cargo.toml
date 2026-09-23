@@ -1,17 +1,17 @@
 [package]
-name = "yua-osd"
-description = "YUA OS Manager daemon — acesso privilegiado auditável ao hardware"
+name = "sysforge-osd"
+description = "SYSFORGE OS Manager daemon — acesso privilegiado auditável ao hardware"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
 [[bin]]
-name = "yua-osd"
+name = "sysforge-osd"
 path = "src/main.rs"
 
 [dependencies]
-yua-core = { path = "../core" }
+sysforge-core = { path = "../core" }
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

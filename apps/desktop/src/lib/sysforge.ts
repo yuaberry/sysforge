@@ -6,10 +6,10 @@ export { usbEntryId } from '../types';
 
 /** Levantado quando o frontend roda fora do app Tauri (ex.: vite dev puro). */
 export class BridgeUnavailable extends Error {
-  readonly code = 'YUA-BRIDGE-001';
+  readonly code = 'SF-BRIDGE-001';
   constructor() {
     super(
-      'Backend Tauri não disponível neste contexto. Abra o app desktop (yua-desktop) ' +
+      'Backend Tauri não disponível neste contexto. Abra o app desktop (sysforge-desktop) ' +
         'para dados reais do sistema — nada de dados falsos aqui.',
     );
     this.name = 'BridgeUnavailable';
@@ -28,15 +28,15 @@ export function toBackendError(e: unknown): BackendError {
     } catch {
       /* string crua */
     }
-    return { code: 'YUA-IO-99', message: e };
+    return { code: 'SF-IO-99', message: e };
   }
   if (e && typeof e === 'object' && 'code' in (e as Record<string, unknown>)) {
     return e as BackendError;
   }
-  return { code: 'YUA-IO-99', message: String(e) };
+  return { code: 'SF-IO-99', message: String(e) };
 }
 
-/** Invoca um comando read-only do backend (yua-core in-process). */
+/** Invoca um comando read-only do backend (sysforge-core in-process). */
 export async function backend<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if (!(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__) {
     throw new BridgeUnavailable();

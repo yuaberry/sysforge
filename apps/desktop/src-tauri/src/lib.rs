@@ -1,33 +1,33 @@
-//! YUA OS MANAGER — app desktop (Tauri 2).
+//! SYSFORGE — app desktop (Tauri 2).
 //!
-//! Todos os comandos abaixo são READ-ONLY e rodam IN-PROCESS via yua-core
+//! Todos os comandos abaixo são READ-ONLY e rodam IN-PROCESS via sysforge-core
 //! (sem daemon). Operações privilegiadas (escrita em disco/ESP/UEFI) chegarão
-//! na Fase 2 e passarão EXCLUSIVAMENTE pelo daemon yua-osd — o app nunca
+//! na Fase 2 e passarão EXCLUSIVAMENTE pelo daemon sysforge-osd — o app nunca
 //! pedirá sudo direto.
 
 use serde_json::Value;
 
-use yua_core::boot::efi::read_efi_state;
-use yua_core::boot::esp::read_esp;
-use yua_core::capability::probe_capabilities;
-use yua_core::disk::lsblk::list_blockdevices;
-use yua_core::disk::smart::smart_health;
-use yua_core::disk::udev::enrich_from_udev;
-use yua_core::error::YuaError;
-use yua_core::executor::Executor;
-use yua_core::hw::system::{probe_system_info, read_secure_boot};
-use yua_core::ipc::client::YuaClient;
-use yua_core::ipc::protocol::DEFAULT_SYSTEM_SOCKET;
-use yua_core::windows::checklist::run_checklist;
-use yua_core::windows::media::list_removable_media;
-use yua_core::windows::unattend::{generate_autounattend, UnattendConfig};
+use sysforge_core::boot::efi::read_efi_state;
+use sysforge_core::boot::esp::read_esp;
+use sysforge_core::capability::probe_capabilities;
+use sysforge_core::disk::lsblk::list_blockdevices;
+use sysforge_core::disk::smart::smart_health;
+use sysforge_core::disk::udev::enrich_from_udev;
+use sysforge_core::error::SysforgeError;
+use sysforge_core::executor::Executor;
+use sysforge_core::hw::system::{probe_system_info, read_secure_boot};
+use sysforge_core::ipc::client::YuaClient;
+use sysforge_core::ipc::protocol::DEFAULT_SYSTEM_SOCKET;
+use sysforge_core::windows::checklist::run_checklist;
+use sysforge_core::windows::media::list_removable_media;
+use sysforge_core::windows::unattend::{generate_autounattend, UnattendConfig};
 
 fn ok<T: serde::Serialize>(v: T) -> Value {
     serde_json::to_value(v).unwrap_or(Value::Null)
 }
 
 /// Erro como JSON estruturado — a UI sempre recebe código + motivo real.
-fn err(e: YuaError) -> Value {
+fn err(e: SysforgeError) -> Value {
     serde_json::json!({
         "error": {
             "code": e.code,
@@ -41,8 +41,8 @@ fn err(e: YuaError) -> Value {
 #[tauri::command]
 fn get_app_info() -> Value {
     ok(serde_json::json!({
-        "app": "yua-desktop",
-        "version": yua_core::YUA_VERSION,
+        "app": "sysforge-desktop",
+        "version": sysforge_core::YUA_VERSION,
         "backend": "in-process (somente leitura)",
         "daemon_required_for": "operações privilegiadas (Fase 2+)",
     }))
@@ -112,12 +112,12 @@ fn daemon_call(method: String, params: Value) -> Result<Value, Value> {
 /// Sobe o daemon system via pkexec (polkit pede a senha NA TELA).
 #[tauri::command]
 fn ensure_system_daemon() -> Result<Value, Value> {
-    yua_core::ipc::system::ensure_system_daemon(std::time::Duration::from_secs(90), |_| {})
+    sysforge_core::ipc::system::ensure_system_daemon(std::time::Duration::from_secs(90), |_| {})
         .map(|sock| serde_json::json!({ "socket": sock.display().to_string() }))
         .map_err(wire_err)
 }
 
-fn wire_err(e: YuaError) -> Value {
+fn wire_err(e: SysforgeError) -> Value {
     serde_json::json!({
         "code": e.code,
         "message": e.message,
@@ -169,8 +169,8 @@ fn unattend_save(edition: String, full_wipe: bool) -> Result<Value, Value> {
     };
     std::fs::write(&path, &xml).map_err(|e| {
         wire_err(
-            YuaError::new(
-                yua_core::error::ErrorDomain::Io,
+            SysforgeError::new(
+                sysforge_core::error::ErrorDomain::Io,
                 13,
                 format!("Falha ao gravar {}", path.display()),
             )
@@ -199,14 +199,61 @@ fn save_text_file(path: String, contents: String) -> Result<Value, Value> {
         .map(|_| serde_json::json!({ "saved": path }))
         .map_err(|e| {
             wire_err(
-                YuaError::new(yua_core::error::ErrorDomain::Io, 13, format!("Falha ao gravar {path}"))
+                SysforgeError::new(sysforge_core::error::ErrorDomain::Io, 13, format!("Falha ao gravar {path}"))
                     .with_technical(e.to_string()),
             )
         })
 }
 
+/// Verifica se já existe um agente de diálogo polkit na sessão
+/// (GNOME/MATE/Cinnamon normalmente registram um no login).
+fn polkit_agent_running() -> bool {
+    std::fs::read_dir("/proc").ok().map(|rd| {
+        rd.filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().chars().all(|c| c.is_ascii_digit()))
+            .any(|e| {
+                let cmdline = std::fs::read_to_string(format!("/proc/{}/cmdline", e.file_name().to_string_lossy()))
+                    .unwrap_or_default();
+                cmdline.contains("authentication-agent")
+            })
+    }).unwrap_or(false)
+}
+
+/// Garante que exista um agente de diálogo polkit para a sessão do app.
+/// Sem ele, pedidos de autorização do daemon morrem em silêncio
+/// (pkcheck fica esperando um diálogo que ninguém mostra — bug real
+/// encontrado em campo). Se a sessão já tem agente, não faz nada.
+/// O .deb depende de mate-polkit — o binário existe em Ubuntu/Mint.
+fn ensure_polkit_agent() {
+    if polkit_agent_running() {
+        return;
+    }
+    let candidates = [
+        "/usr/libexec/polkit-mate-authentication-agent-1",
+        "/usr/lib/x86_64-linux-gnu/polkit-mate-authentication-agent-1",
+        "/usr/lib/polkit-mate/polkit-mate-authentication-agent-1",
+        "/usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1",
+    ];
+    for bin in candidates {
+        if !std::path::Path::new(bin).exists() {
+            continue;
+        }
+        match std::process::Command::new(bin)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+        {
+            // "already exists" sai rápido e silencioso — tolerável.
+            Ok(_) => { eprintln!("sysforge: agente de diálogo polkit iniciado ({bin})"); return; }
+            Err(e) => eprintln!("sysforge: não pôde iniciar o agente polkit {bin}: {e}"),
+        }
+    }
+    eprintln!("sysforge: nenhum agente de diálogo polkit disponível — autorizações via app podem não mostrar senha");
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    ensure_polkit_agent();
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             get_app_info,
@@ -226,5 +273,5 @@ pub fn run() {
             save_text_file
         ])
         .run(tauri::generate_context!())
-        .expect("falha ao iniciar o YUA OS MANAGER");
+        .expect("falha ao iniciar o SYSFORGE");
 }

@@ -1,17 +1,17 @@
 [package]
-name = "yua-cli"
-description = "yua — CLI de terminal do YUA OS MANAGER, com diagnóstico real do ambiente"
+name = "sysforge-cli"
+description = "sysforge — CLI de terminal do SYSFORGE, com diagnóstico real do ambiente"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
 [[bin]]
-name = "yua"
+name = "sysforge"
 path = "src/main.rs"
 
 [dependencies]
-yua-core = { path = "../core" }
+sysforge-core = { path = "../core" }
 clap.workspace = true
 colored.workspace = true
 serde.workspace = true

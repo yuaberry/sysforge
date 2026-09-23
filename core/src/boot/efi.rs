@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{ErrorDomain, YuaError};
+use crate::error::{ErrorDomain, SysforgeError};
 use crate::executor::{CommandSpec, Executor};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -79,7 +79,7 @@ impl EfiBootEntry {
             .unwrap_or(false)
     }
 
-    /// Pode ser removida com segurança pelo YUA (após snapshot + confirmação)?
+    /// Pode ser removida com segurança pelo SYSFORGE (após snapshot + confirmação)?
     /// Apenas entradas de disco/arquivo — internas do firmware são intocáveis.
     pub fn is_removable_by_os(&self) -> bool {
         !self.is_firmware_internal()
@@ -198,20 +198,20 @@ pub fn parse_efibootmgr(output: &str) -> EfiBootState {
 }
 
 /// Leitura real do estado UEFI. Sem root funciona na maioria dos sistemas
-/// (inclusive esta máquina); onde exigir, o erro sobe honesto (YUA-BOOT-001).
-pub fn read_efi_state(executor: &Executor) -> Result<EfiBootState, YuaError> {
+/// (inclusive esta máquina); onde exigir, o erro sobe honesto (SF-BOOT-001).
+pub fn read_efi_state(executor: &Executor) -> Result<EfiBootState, SysforgeError> {
     let spec = CommandSpec::new("efibootmgr").timeout(std::time::Duration::from_secs(15));
     let r = executor.run_readonly(spec)?;
     if !r.success() {
         return Err(
-            YuaError::new(ErrorDomain::Boot, 1, "Não foi possível ler as entradas de boot UEFI")
+            SysforgeError::new(ErrorDomain::Boot, 1, "Não foi possível ler as entradas de boot UEFI")
                 .with_technical(format!(
                     "efibootmgr saiu com {:?}: {}",
                     r.exit_code,
                     r.stderr.trim()
                 ))
                 .with_recommendation(
-                    "Em alguns sistemas a leitura do efivarfs exige root; nesse caso use o daemon em modo sistema (`yua daemon status`).",
+                    "Em alguns sistemas a leitura do efivarfs exige root; nesse caso use o daemon em modo sistema (`sysforge daemon status`).",
                 ),
         );
     }

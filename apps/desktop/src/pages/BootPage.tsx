@@ -1,5 +1,5 @@
 import { useBackend, Card, ErrorCard, Skeleton, KV, Badge } from './Dashboard';
-import { fmtBytes } from '../lib/yua';
+import { fmtBytes } from '../lib/sysforge';
 import ControlPanel from '../components/ControlPanel';
 import type { EspInfo, EfiBootState, SecureBootInfo } from '../types';
 
@@ -69,7 +69,7 @@ export default function BootPage() {
                     />
                   </>
                 ) : (
-                  <p className="dim">ESP não montada — YUA-BOOT-002.</p>
+                  <p className="dim">ESP não montada — SF-BOOT-002.</p>
                 )}
               </Card>
             )}

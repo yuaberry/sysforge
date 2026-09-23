@@ -1,7 +1,7 @@
 //! Instalação do Windows: checklist de pré-requisitos com sondagem REAL,
 //! geração de autounattend.xml e detecção de mídia (Ventoy/USB).
 //!
-//! HONESTIDADE DA FASE: o YUA automatiza tudo ATÉ o reboot — mídia pronta,
+//! HONESTIDADE DA FASE: o SYSFORGE automatiza tudo ATÉ o reboot — mídia pronta,
 //! unattend no lugar, BootNext armado. Após o reboot, quem executa é o
 //! instalador do Windows (com nossas respostas). Nada é fingido.
 

@@ -1,12 +1,12 @@
-//! `yua-osd` — daemon do YUA OS MANAGER.
+//! `sysforge-osd` — daemon do SYSFORGE.
 //!
 //! Dois modos:
 //! - **dev** (padrão): socket em $XDG_RUNTIME_DIR, aceita apenas o próprio
 //!   usuário (SO_PEERCRED), serve métodos read-only e recusa QUALQUER
-//!   operação destrutiva com YUA-AUTH-002. Fail-closed por construção.
-//! - **system**: socket /run/yua-osd.sock (systemd socket activation),
+//!   operação destrutiva com SF-AUTH-002. Fail-closed por construção.
+//! - **system**: socket /run/sysforge-osd.sock (systemd socket activation),
 //!   executa como root; métodos read-only liberados, destrutivos recusados
-//!   até a Fase 2 (YUA-AUTH-004). Toda chamada é auditada em JSONL.
+//!   até a Fase 2 (SF-AUTH-004). Toda chamada é auditada em JSONL.
 //!
 //! Este binário é a ÚNICA porta privilegiada da plataforma. O app desktop
 //! e o CLI nunca pedem sudo direto — pedem ao daemon.
@@ -17,8 +17,8 @@ mod server;
 
 use std::path::{Path, PathBuf};
 
-use yua_core::ipc::DEFAULT_SYSTEM_SOCKET;
-use yua_core::logging;
+use sysforge_core::ipc::DEFAULT_SYSTEM_SOCKET;
+use sysforge_core::logging;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -44,14 +44,14 @@ pub struct Config {
 }
 
 fn usage() -> ! {
-    eprintln!("yua-osd {VERSION} — YUA OS Manager daemon");
+    eprintln!("sysforge-osd {VERSION} — SYSFORGE OS Manager daemon");
     eprintln!();
     eprintln!("USO:");
-    eprintln!("  yua-osd [--dev | --system] [--socket CAMINHO]");
+    eprintln!("  sysforge-osd [--dev | --system] [--socket CAMINHO]");
     eprintln!();
     eprintln!("MODOS:");
     eprintln!("  --dev      modo desenvolvimento (padrão): somente leitura, mesmo usuário");
-    eprintln!("  --system   modo sistema: requer root, socket /run/yua-osd.sock");
+    eprintln!("  --system   modo sistema: requer root, socket /run/sysforge-osd.sock");
     eprintln!();
     eprintln!("OPÇÕES:");
     eprintln!("  --socket   caminho do socket unix (sobrepõe o padrão do modo)");
@@ -76,7 +76,7 @@ fn parse_args() -> Config {
                 }
             },
             "--version" => {
-                println!("yua-osd {VERSION}");
+                println!("sysforge-osd {VERSION}");
                 std::process::exit(0);
             }
             "--help" | "-h" => usage(),
@@ -87,7 +87,7 @@ fn parse_args() -> Config {
         }
     }
     let socket = socket.unwrap_or_else(|| match mode {
-        DaemonMode::Dev => yua_core::ipc::dev_socket_default(),
+        DaemonMode::Dev => sysforge_core::ipc::dev_socket_default(),
         DaemonMode::System => PathBuf::from(DEFAULT_SYSTEM_SOCKET),
     });
     Config { mode, socket }
@@ -95,7 +95,7 @@ fn parse_args() -> Config {
 
 fn daemon_log_file() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|h| {
-        PathBuf::from(h).join(".local/share/yua-os-manager/logs/daemon.log")
+        PathBuf::from(h).join(".local/share/sysforge/logs/daemon.log")
     })
 }
 
@@ -108,7 +108,7 @@ fn main() {
     match cfg.mode {
         DaemonMode::System => {
             if unsafe { libc::getuid() } != 0 {
-                eprintln!("yua-osd: modo --system exige root (use o systemd service: install-daemon.sh)");
+                eprintln!("sysforge-osd: modo --system exige root (use o systemd service: install-daemon.sh)");
                 std::process::exit(1);
             }
             logging::init(None, "info"); // stderr → journald
@@ -119,10 +119,10 @@ fn main() {
         }
     }
 
-    tracing::info!(version = VERSION, mode = cfg.mode.label(), socket = %cfg.socket.display(), "yua-osd iniciando");
+    tracing::info!(version = VERSION, mode = cfg.mode.label(), socket = %cfg.socket.display(), "sysforge-osd iniciando");
 
     if let Err(e) = server::serve(&cfg) {
-        eprintln!("yua-osd: {e}");
+        eprintln!("sysforge-osd: {e}");
         std::process::exit(1);
     }
 }

@@ -28,7 +28,7 @@ impl EspInfo {
     pub fn availability(&self) -> Availability {
         if !self.mounted {
             return Availability::unavailable(
-                "YUA-BOOT-002",
+                "SF-BOOT-002",
                 "ESP (/boot/efi) não está montada",
             );
         }

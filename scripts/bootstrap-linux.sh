@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# YUA OS MANAGER — bootstrap do ambiente Linux (Mint 22.3 / Ubuntu Noble).
+# SYSFORGE — bootstrap do ambiente Linux (Mint 22.3 / Ubuntu Noble).
 #
 # Uso:
 #   bash scripts/bootstrap-linux.sh --check   # só reporta (sem sudo)
@@ -8,11 +8,11 @@
 #
 # Idempotente: pode rodar quantas vezes quiser.
 # Após instalar, a fase de build faz (na ordem):
-#   1. cargo build --workspace --release   (yua + yua-osd)
+#   1. cargo build --workspace --release   (sysforge + sysforge-osd)
 #   2. cargo test --workspace              (validação real)
 #   3. frontend React (npm install + build)
 #   4. app desktop (cargo build em apps/desktop/src-tauri)
-#   5. symlinks yua/yua-osd em ~/.local/bin
+#   5. symlinks sysforge/sysforge-osd em ~/.local/bin
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
@@ -36,7 +36,7 @@ BUILD_PKGS=(
 
 # Runtime RECOMENDADO (falha aqui = aviso, não aborta).
 RUNTIME_PKGS=(
-  smartmontools   # smartctl — saúde REAL de discos (YUA-DEP-005 sem isto)
+  smartmontools   # smartctl — saúde REAL de discos (SF-DEP-005 sem isto)
   nvme-cli        # diagnóstico NVMe
   xorriso         # manipulação de ISOs
   wimtools        # aplicar install.wim/ESD do Windows
@@ -65,8 +65,8 @@ check() {
     echo "Para instalar + compilar tudo:  bash scripts/bootstrap-linux.sh"
   fi
   # estado dos builds
-  [ -x "$ROOT/target/release/yua" ] && echo "✔ CLI release pronto" || echo "· CLI ainda não compilado (release)"
-  [ -x "$ROOT/target/release/yua-desktop" ] && echo "✔ app desktop pronto" || echo "· app desktop ainda não compilado"
+  [ -x "$ROOT/target/release/sysforge" ] && echo "✔ CLI release pronto" || echo "· CLI ainda não compilado (release)"
+  [ -x "$ROOT/target/release/sysforge-desktop" ] && echo "✔ app desktop pronto" || echo "· app desktop ainda não compilado"
   [ "${#missing[@]}" -eq 0 ]
 }
 
@@ -97,7 +97,7 @@ do_install() {
 do_build() {
   echo
   echo "════ FASE BUILD (sem sudo — só compila) ════"
-  echo "→ 1/5 workspace (yua + yua-osd) release…"
+  echo "→ 1/5 workspace (sysforge + sysforge-osd) release…"
   cargo build --workspace --release
 
   echo "→ 2/5 testes do workspace (validação real, ~10s)…"
@@ -111,15 +111,15 @@ do_build() {
 
   echo "→ 5/5 symlinks em ~/.local/bin…"
   mkdir -p "$HOME/.local/bin"
-  ln -sf "$ROOT/target/release/yua" "$HOME/.local/bin/yua"
-  ln -sf "$ROOT/target/release/yua-osd" "$HOME/.local/bin/yua-osd"
-  echo "✔ yua e yua-osd no PATH (~/.local/bin)"
+  ln -sf "$ROOT/target/release/sysforge" "$HOME/.local/bin/sysforge"
+  ln -sf "$ROOT/target/release/sysforge-osd" "$HOME/.local/bin/sysforge-osd"
+  echo "✔ sysforge e sysforge-osd no PATH (~/.local/bin)"
 
   echo
   echo "════ PRONTO ════"
-  echo "  CLI:      yua doctor"
-  echo "  Windows:  yua winstall"
-  echo "  App:      ~/yua-os-manager/target/release/yua-desktop   (ou npx tauri dev em apps/desktop)"
+  echo "  CLI:      sysforge doctor"
+  echo "  Windows:  sysforge install"
+  echo "  App:      ~/sysforge/target/release/sysforge-desktop   (ou npx tauri dev em apps/desktop)"
 }
 
 case "$mode" in

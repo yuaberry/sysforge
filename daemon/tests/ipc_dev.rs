@@ -1,6 +1,6 @@
-//! Teste de integração REAL: sobe o daemon yua-osd em modo dev, conecta o
+//! Teste de integração REAL: sobe o daemon sysforge-osd em modo dev, conecta o
 //! cliente IPC e valida o protocolo ponta a ponta — incluindo o FAIL-CLOSED
-//! de métodos destrutivos (YUA-AUTH-002) e métodos desconhecidos.
+//! de métodos destrutivos (SF-AUTH-002) e métodos desconhecidos.
 
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
@@ -8,15 +8,15 @@ use std::thread;
 use std::time::Duration;
 
 use serde_json::json;
-use yua_core::error::YuaError;
-use yua_core::ipc::protocol::{
+use sysforge_core::error::SysforgeError;
+use sysforge_core::ipc::protocol::{
     METHOD_BOOT_SET_NEXT, METHOD_BOOT_SNAPSHOT, METHOD_DISKS_LIST, METHOD_ECHO,
     METHOD_EFI_ENTRIES, METHOD_SYSTEM_INFO,
 };
-use yua_core::ipc::YuaClient;
+use sysforge_core::ipc::YuaClient;
 
 fn spawn_daemon(socket: &PathBuf) -> Child {
-    let bin = env!("CARGO_BIN_EXE_yua-osd");
+    let bin = env!("CARGO_BIN_EXE_sysforge-osd");
     Command::new(bin)
         .arg("--dev")
         .arg("--socket")
@@ -24,7 +24,7 @@ fn spawn_daemon(socket: &PathBuf) -> Child {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("falhou ao spawnar yua-osd")
+        .expect("falhou ao spawnar sysforge-osd")
 }
 
 fn wait_socket(socket: &PathBuf) {
@@ -38,13 +38,13 @@ fn wait_socket(socket: &PathBuf) {
 }
 
 #[test]
-fn dev_daemon_protocol_and_fail_closed() -> Result<(), YuaError> {
-    let socket = std::env::temp_dir().join(format!("yua-osd-it-{}.sock", std::process::id()));
+fn dev_daemon_protocol_and_fail_closed() -> Result<(), SysforgeError> {
+    let socket = std::env::temp_dir().join(format!("sysforge-osd-it-{}.sock", std::process::id()));
     let _ = std::fs::remove_file(&socket);
     let mut child = spawn_daemon(&socket);
     wait_socket(&socket);
 
-    let result = (|| -> Result<(), YuaError> {
+    let result = (|| -> Result<(), SysforgeError> {
         let mut client = YuaClient::connect(&socket)?;
 
         // v1.echo — ida e volta
@@ -76,27 +76,27 @@ fn dev_daemon_protocol_and_fail_closed() -> Result<(), YuaError> {
                 .any(|e| e["name"] == "Ubuntu")
         );
 
-        // FAIL-CLOSED: método destrutivo recusado em modo dev — YUA-AUTH-002.
+        // FAIL-CLOSED: método destrutivo recusado em modo dev — SF-AUTH-002.
         let err = client
             .call("v1.disk.wipe", json!({"disk": "/dev/sda"}))
             .unwrap_err();
-        assert_eq!(err.code, "YUA-AUTH-002");
+        assert_eq!(err.code, "SF-AUTH-002");
         assert!(!err.recommendation.is_empty());
 
-        // BootNext agora EXISTE, mas em dev continua fail-closed (YUA-AUTH-002).
+        // BootNext agora EXISTE, mas em dev continua fail-closed (SF-AUTH-002).
         let err = client
             .call(METHOD_BOOT_SET_NEXT, json!({"entry_id": "0000", "confirm": true}))
             .unwrap_err();
-        assert_eq!(err.code, "YUA-AUTH-002");
+        assert_eq!(err.code, "SF-AUTH-002");
 
         // Snapshot é read-only ⇒ permitido em dev, com arquivo real gravado.
         let snap = client.call(METHOD_BOOT_SNAPSHOT, json!({}))?;
         assert!(snap["snapshot_path"].as_str().is_some());
         assert!(snap["state"]["entries"].as_array().unwrap().len() >= 13);
 
-        // Método desconhecido → YUA-NOTSUP-001, nunca "silêncio".
+        // Método desconhecido → SF-NOTSUP-001, nunca "silêncio".
         let err = client.call("v1.metodo.inexistente", json!({})).unwrap_err();
-        assert_eq!(err.code, "YUA-NOTSUP-001");
+        assert_eq!(err.code, "SF-NOTSUP-001");
 
         Ok(())
     })();

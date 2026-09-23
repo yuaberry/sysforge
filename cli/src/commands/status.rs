@@ -1,14 +1,14 @@
-//! `yua status` — visão geral real do sistema vivo.
+//! `sysforge status` — visão geral real do sistema vivo.
 
-use yua_core::boot::efi::read_efi_state;
-use yua_core::boot::esp::read_esp;
-use yua_core::executor::Executor;
-use yua_core::hw::system::probe_system_info;
-use yua_core::error::YuaError;
+use sysforge_core::boot::efi::read_efi_state;
+use sysforge_core::boot::esp::read_esp;
+use sysforge_core::executor::Executor;
+use sysforge_core::hw::system::probe_system_info;
+use sysforge_core::error::SysforgeError;
 
 use crate::ui::{self, paint};
 
-pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
+pub fn run(json: bool, color: bool) -> Result<(), SysforgeError> {
     let sys = probe_system_info();
     let esp = read_esp();
     let efi = read_efi_state(&Executor::default()).ok();
@@ -109,7 +109,7 @@ pub fn run(json: bool, color: bool) -> Result<(), YuaError> {
         kv(
             "ESP",
             paint(
-                "NÃO montada — YUA-BOOT-002 (instalação UEFI ficará indisponível)",
+                "NÃO montada — SF-BOOT-002 (instalação UEFI ficará indisponível)",
                 "red",
                 color,
             ),

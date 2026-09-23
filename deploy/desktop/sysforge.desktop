@@ -1,11 +1,11 @@
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=YUA OS MANAGER
+Name=SYSFORGE
 GenericName=Gerenciador de Sistema
 Comment=Discos, boot UEFI, diagnóstico e instalação do Windows 11 — operações privilegiadas via polkit
-Exec=yua-desktop
-Icon=yua-os-manager
+Exec=sysforge-desktop
+Icon=sysforge
 Terminal=false
 Categories=System;Utility;Settings;
 Keywords=system;disco;uefi;boot;windows;bios;instalacao;

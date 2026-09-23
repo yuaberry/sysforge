@@ -14,7 +14,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::error::{ErrorDomain, YuaError};
+use crate::error::{ErrorDomain, SysforgeError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -101,7 +101,7 @@ pub struct TransitionEntry {
     pub note: Option<String>,
 }
 
-/// Registro persistido da operação (espelha /var/lib/yua-os-manager/operations).
+/// Registro persistido da operação (espelha /var/lib/sysforge/operations).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperationRecord {
     pub operation_id: String,
@@ -159,9 +159,9 @@ impl OperationRecord {
         &mut self,
         to: OperationState,
         note: Option<String>,
-    ) -> Result<(), YuaError> {
+    ) -> Result<(), SysforgeError> {
         if !self.state.can_transition(to) {
-            return Err(YuaError::new(
+            return Err(SysforgeError::new(
                 ErrorDomain::State,
                 2,
                 format!(
@@ -171,7 +171,7 @@ impl OperationRecord {
                 ),
             )
             .with_technical("a máquina de estados do deployment só permite transições do grafo explícito")
-            .with_recommendation("Se isto ocorrer, a operação está em estado inconsistente: consulte os logs e use `yua recover`."));
+            .with_recommendation("Se isto ocorrer, a operação está em estado inconsistente: consulte os logs e use `sysforge recover`."));
         }
         let entry = TransitionEntry {
             from: self.state,
@@ -189,7 +189,7 @@ impl OperationRecord {
 
     /// Persistência atômica: tmp + fsync + rename. Se o processo morrer no
     /// meio, o arquivo antigo permanece íntegro — nunca um JSON truncado.
-    pub fn persist_atomic(&self, dir: &Path) -> Result<PathBuf, YuaError> {
+    pub fn persist_atomic(&self, dir: &Path) -> Result<PathBuf, SysforgeError> {
         fs::create_dir_all(dir)?;
         let final_path = dir.join(format!("{}.operation.json", self.operation_id));
         let tmp_path = dir.join(format!(".{}.operation.json.tmp", self.operation_id));
@@ -205,12 +205,12 @@ impl OperationRecord {
 
     /// Carrega e valida o checksum (detecta corrupção/edição manual).
     /// Comparação ESTRITA: checksum ausente também é adulteração.
-    pub fn load(path: &Path) -> Result<Self, YuaError> {
+    pub fn load(path: &Path) -> Result<Self, SysforgeError> {
         let raw = fs::read_to_string(path)?;
         let rec: OperationRecord = serde_json::from_str(&raw)?;
         let expected = rec.compute_checksum();
         if rec.checksum != expected {
-            return Err(YuaError::new(
+            return Err(SysforgeError::new(
                 ErrorDomain::State,
                 3,
                 "Arquivo de operação corrompido (checksum divergente)",
@@ -262,7 +262,7 @@ mod tests {
 
     #[test]
     fn atomic_persist_and_load_roundtrip() {
-        let dir = std::env::temp_dir().join(format!("yua-state-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("sysforge-state-test-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let mut op = OperationRecord::new("op-persist");
         op.transition(OperationState::Planning, Some("teste".into())).unwrap();
@@ -276,7 +276,7 @@ mod tests {
 
     #[test]
     fn checksum_detects_tamper() {
-        let dir = std::env::temp_dir().join(format!("yua-state-tamper-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("sysforge-state-tamper-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let mut op = OperationRecord::new("op-tamper");
         op.persist_atomic(&dir).unwrap();
@@ -284,7 +284,7 @@ mod tests {
         let raw = fs::read_to_string(&path).unwrap();
         let tampered = raw.replace("\"state\": \"idle\"", "\"state\": \"deploying\"");
         fs::write(&path, tampered).unwrap();
-        assert_eq!(OperationRecord::load(&path).unwrap_err().code, "YUA-STATE-003");
+        assert_eq!(OperationRecord::load(&path).unwrap_err().code, "SF-STATE-003");
         fs::remove_dir_all(&dir).ok();
     }
 }

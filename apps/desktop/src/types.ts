@@ -1,4 +1,4 @@
-// Tipos espelhando a saída serde do yua-core (snake_case preservado).
+// Tipos espelhando a saída serde do sysforge-core (snake_case preservado).
 
 export interface OsInfo {
   id?: string;
@@ -144,7 +144,7 @@ export interface CapabilityReport {
   tauri_build_ready: boolean;
 }
 
-// Erro estruturado do backend (espelha YuaError)
+// Erro estruturado do backend (espelha SysforgeError)
 export interface BackendError {
   code: string;
   message: string;

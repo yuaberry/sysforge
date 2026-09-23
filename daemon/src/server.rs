@@ -11,8 +11,8 @@ use std::thread;
 use chrono::Utc;
 use serde_json::json;
 
-use yua_core::error::{ErrorDomain, YuaError};
-use yua_core::ipc::protocol::{Request, Response, WireError};
+use sysforge_core::error::{ErrorDomain, SysforgeError};
+use sysforge_core::ipc::protocol::{Request, Response, WireError};
 
 use crate::handlers;
 use crate::{auth, Config, DaemonMode};
@@ -25,7 +25,7 @@ pub struct Peer {
 
 /// Identidade REAL do cliente direto do kernel. O cliente não envia nada
 /// que possa mentir aqui — é o socket que reporta.
-fn peer_credentials(stream: &UnixStream) -> Result<Peer, YuaError> {
+fn peer_credentials(stream: &UnixStream) -> Result<Peer, SysforgeError> {
     let mut ucred: libc::ucred = unsafe { std::mem::zeroed() };
     let mut len = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
     let rc = unsafe {
@@ -38,7 +38,7 @@ fn peer_credentials(stream: &UnixStream) -> Result<Peer, YuaError> {
         )
     };
     if rc != 0 {
-        return Err(YuaError::new(
+        return Err(SysforgeError::new(
             ErrorDomain::Auth,
             3,
             "Não foi possível obter a identidade (SO_PEERCRED) do cliente",
@@ -54,11 +54,11 @@ fn audit_path(mode: DaemonMode) -> Option<std::path::PathBuf> {
     match mode {
         // dev: dentro do perfil do usuário
         DaemonMode::Dev => std::env::var_os("HOME").map(|h| {
-            std::path::PathBuf::from(h).join(".local/share/yua-os-manager/logs/audit.jsonl")
+            std::path::PathBuf::from(h).join(".local/share/sysforge/logs/audit.jsonl")
         }),
         // system: área do serviço (root)
         DaemonMode::System => Some(std::path::PathBuf::from(
-            "/var/lib/yua-os-manager/audit.jsonl",
+            "/var/lib/sysforge/audit.jsonl",
         )),
     }
 }
@@ -81,15 +81,15 @@ fn audit(mode: DaemonMode, peer: Peer, method: &str, allowed: bool) {
     }
 }
 
-fn prepare_socket(path: &Path, mode: DaemonMode) -> Result<UnixListener, YuaError> {
+fn prepare_socket(path: &Path, mode: DaemonMode) -> Result<UnixListener, SysforgeError> {
     if path.exists() {
         // Socket de instância viva? Recusa duplicação. Morto (stale)? Remove.
         match UnixStream::connect(path) {
             Ok(_) => {
-                return Err(YuaError::new(
+                return Err(SysforgeError::new(
                     ErrorDomain::Io,
                     10,
-                    "Outra instância do yua-osd já está escutando neste socket",
+                    "Outra instância do sysforge-osd já está escutando neste socket",
                 )
                 .with_technical(format!("socket: {}", path.display()))
                 .with_recommendation("Use a instância existente ou pare-a antes de iniciar outra."))
@@ -111,7 +111,7 @@ fn prepare_socket(path: &Path, mode: DaemonMode) -> Result<UnixListener, YuaErro
 }
 
 /// fd herdado do systemd (socket activation): LISTEN_PID=pid + LISTEN_FDS>=1 → fd 3.
-/// Sem isso, o daemon tentaria rebindar um socket que o systemd já segura (YUA-IO-010).
+/// Sem isso, o daemon tentaria rebindar um socket que o systemd já segura (SF-IO-010).
 fn systemd_listener() -> Option<UnixListener> {
     let pid: u32 = std::env::var("LISTEN_PID").ok()?.parse().ok()?;
     let fds: i32 = std::env::var("LISTEN_FDS").ok()?.parse().ok()?;
@@ -124,7 +124,7 @@ fn systemd_listener() -> Option<UnixListener> {
     }
 }
 
-pub fn serve(cfg: &Config) -> Result<(), YuaError> {
+pub fn serve(cfg: &Config) -> Result<(), SysforgeError> {
     let listener = match systemd_listener() {
         Some(l) => l, // systemd: socket já criado e com perms corretas (unit SocketMode)
         None => prepare_socket(&cfg.socket, cfg.mode)?,
@@ -150,7 +150,7 @@ pub fn serve(cfg: &Config) -> Result<(), YuaError> {
     Ok(())
 }
 
-fn handle_connection(stream: UnixStream, cfg: &Config) -> Result<(), YuaError> {
+fn handle_connection(stream: UnixStream, cfg: &Config) -> Result<(), SysforgeError> {
     let peer = peer_credentials(&stream)?;
     let reader = BufReader::new(stream.try_clone()?);
     let mut writer = stream;
@@ -179,7 +179,7 @@ fn handle_connection(stream: UnixStream, cfg: &Config) -> Result<(), YuaError> {
             Err(e) => Response::err(
                 0,
                 WireError::from(
-                    YuaError::new(ErrorDomain::Io, 11, "Requisição malformada no protocolo NDJSON")
+                    SysforgeError::new(ErrorDomain::Io, 11, "Requisição malformada no protocolo NDJSON")
                         .with_technical(e.to_string()),
                 ),
             ),

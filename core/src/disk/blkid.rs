@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::error::YuaError;
+use crate::error::SysforgeError;
 use crate::executor::{CommandSpec, Executor};
 
 /// Parser do formato export do blkid:
@@ -30,7 +30,7 @@ pub fn parse_blkid_export(output: &str) -> BTreeMap<String, String> {
 
 /// Sonda um dispositivo específico. Pode exigir permissões para dispositivos
 /// não montados — o erro sobe honesto para o chamador decidir.
-pub fn probe_blkid(executor: &Executor, device: &str) -> Result<BTreeMap<String, String>, YuaError> {
+pub fn probe_blkid(executor: &Executor, device: &str) -> Result<BTreeMap<String, String>, SysforgeError> {
     let spec = CommandSpec::new("blkid")
         .arg("--output")
         .arg("export")
@@ -38,7 +38,7 @@ pub fn probe_blkid(executor: &Executor, device: &str) -> Result<BTreeMap<String,
         .timeout(std::time::Duration::from_secs(15));
     let r = executor.run_readonly(spec)?;
     if !r.success() {
-        return Err(YuaError::command_failed("blkid", &[], r.exit_code, &r.stderr));
+        return Err(SysforgeError::command_failed("blkid", &[], r.exit_code, &r.stderr));
     }
     Ok(parse_blkid_export(&r.stdout))
 }

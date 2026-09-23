@@ -1,0 +1,12 @@
+[Unit]
+Description=SYSFORGE — daemon socket (sysforge-osd)
+Documentation=https://github.com/yuaberry/sysforge
+
+[Socket]
+ListenStream=/run/sysforge-osd.sock
+SocketMode=0666
+# Qualquer usuário local pode conectar; a AUTORIZIZAÇÃO é por método,
+# dentro do daemon (SO_PEERCRED + polkit — ver com.sysforge.osd.policy).
+
+[Install]
+WantedBy=sockets.target

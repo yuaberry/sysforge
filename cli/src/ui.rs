@@ -53,18 +53,18 @@ pub fn gradient_line(text: &str, on: bool) -> String {
     out
 }
 
-/// Banner de abertura do `yua`.
+/// Banner de abertura do `sysforge`.
 pub fn banner(on: bool) {
     let rule = "━".repeat(52);
     println!("{}", paint(&rule, "magenta", on));
     println!();
-    println!("  {}", gradient_line("YUA OS MANAGER", on));
+    println!("  {}", gradient_line("SYSFORGE", on));
     println!(
         "  {}",
         paint(
             &format!(
                 "v{} · deployment & recovery · protocolo IPC v1 · Linux",
-                yua_core::YUA_VERSION
+                sysforge_core::YUA_VERSION
             ),
             "dim",
             on

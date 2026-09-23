@@ -1,12 +1,12 @@
-//! Sistema de erros do YUA com códigos rastreáveis.
+//! Sistema de erros do SYSFORGE com códigos rastreáveis.
 //!
-//! TODO erro carrega: código estável (`YUA-XXX-NNN`), mensagem legível para o
+//! TODO erro carrega: código estável (`SF-XXX-NNN`), mensagem legível para o
 //! usuário, detalhe técnico e ação recomendada. A UI nunca mostra só
 //! "something went wrong".
 
 use std::fmt;
 
-/// Categorias de erro do YUA. Os códigos são estáveis e documentados em
+/// Categorias de erro do SYSFORGE. Os códigos são estáveis e documentados em
 /// docs/TROUBLESHOOTING.md.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -28,26 +28,26 @@ pub enum ErrorDomain {
 impl ErrorDomain {
     pub fn prefix(self) -> &'static str {
         match self {
-            ErrorDomain::Disk => "YUA-DISK",
-            ErrorDomain::Boot => "YUA-BOOT",
-            ErrorDomain::Image => "YUA-IMAGE",
-            ErrorDomain::Net => "YUA-NET",
-            ErrorDomain::Uefi => "YUA-UEFI",
-            ErrorDomain::Windows => "YUA-WIN",
-            ErrorDomain::Linux => "YUA-LINUX",
-            ErrorDomain::Dep => "YUA-DEP",
-            ErrorDomain::Auth => "YUA-AUTH",
-            ErrorDomain::State => "YUA-STATE",
-            ErrorDomain::Io => "YUA-IO",
-            ErrorDomain::NotSupported => "YUA-NOTSUP",
+            ErrorDomain::Disk => "SF-DISK",
+            ErrorDomain::Boot => "SF-BOOT",
+            ErrorDomain::Image => "SF-IMAGE",
+            ErrorDomain::Net => "SF-NET",
+            ErrorDomain::Uefi => "SF-UEFI",
+            ErrorDomain::Windows => "SF-WIN",
+            ErrorDomain::Linux => "SF-LINUX",
+            ErrorDomain::Dep => "SF-DEP",
+            ErrorDomain::Auth => "SF-AUTH",
+            ErrorDomain::State => "SF-STATE",
+            ErrorDomain::Io => "SF-IO",
+            ErrorDomain::NotSupported => "SF-NOTSUP",
         }
     }
 }
 
-/// Erro estruturado do YUA.
+/// Erro estruturado do SYSFORGE.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, serde::Serialize, serde::Deserialize)]
-pub struct YuaError {
-    /// Código estável, ex.: "YUA-DISK-001".
+pub struct SysforgeError {
+    /// Código estável, ex.: "SF-DISK-001".
     pub code: String,
     /// Mensagem legível para o usuário (o que aconteceu).
     pub message: String,
@@ -57,7 +57,7 @@ pub struct YuaError {
     pub recommendation: String,
 }
 
-impl YuaError {
+impl SysforgeError {
     pub fn new(domain: ErrorDomain, num: u32, message: impl Into<String>) -> Self {
         Self {
             code: format!("{}-{:03}", domain.prefix(), num),
@@ -94,12 +94,12 @@ impl YuaError {
             stderr.trim()
         ))
         .with_recommendation(
-            "Verifique se a ferramenta está instalada e se o usuário tem permissão. Consulte `yua doctor`.",
+            "Verifique se a ferramenta está instalada e se o usuário tem permissão. Consulte `sysforge doctor`.",
         )
     }
 }
 
-impl fmt::Display for YuaError {
+impl fmt::Display for SysforgeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "[{}] {}", self.code, self.message)?;
         if !self.technical.is_empty() {
@@ -112,7 +112,7 @@ impl fmt::Display for YuaError {
     }
 }
 
-impl From<std::io::Error> for YuaError {
+impl From<std::io::Error> for SysforgeError {
     fn from(e: std::io::Error) -> Self {
         Self::new(ErrorDomain::Io, 2, format!("Erro de E/S: {e}"))
             .with_technical(e.to_string())
@@ -120,11 +120,11 @@ impl From<std::io::Error> for YuaError {
     }
 }
 
-impl From<serde_json::Error> for YuaError {
+impl From<serde_json::Error> for SysforgeError {
     fn from(e: serde_json::Error) -> Self {
         Self::new(ErrorDomain::Io, 3, format!("Falha ao processar JSON: {e}"))
             .with_technical(e.to_string())
-            .with_recommendation("Isto geralmente indica saída inesperada de uma ferramenta do sistema. Reporte com `yua logs`.")
+            .with_recommendation("Isto geralmente indica saída inesperada de uma ferramenta do sistema. Reporte com `sysforge logs`.")
     }
 }
 
@@ -144,19 +144,19 @@ mod tests {
 
     #[test]
     fn error_codes_format() {
-        let e = YuaError::new(ErrorDomain::Disk, 1, "disco não encontrado");
-        assert_eq!(e.code, "YUA-DISK-001");
-        let e2 = YuaError::new(ErrorDomain::Uefi, 12, "x");
-        assert_eq!(e2.code, "YUA-UEFI-012");
+        let e = SysforgeError::new(ErrorDomain::Disk, 1, "disco não encontrado");
+        assert_eq!(e.code, "SF-DISK-001");
+        let e2 = SysforgeError::new(ErrorDomain::Uefi, 12, "x");
+        assert_eq!(e2.code, "SF-UEFI-012");
     }
 
     #[test]
     fn display_includes_recommendation() {
-        let e = YuaError::new(ErrorDomain::Auth, 2, "autorização necessária")
+        let e = SysforgeError::new(ErrorDomain::Auth, 2, "autorização necessária")
             .with_technical("polkit indisponível")
             .with_recommendation("instale policykit-1");
         let s = e.to_string();
-        assert!(s.contains("YUA-AUTH-002"));
+        assert!(s.contains("SF-AUTH-002"));
         assert!(s.contains("detalhe: polkit indisponível"));
         assert!(s.contains("sugestão: instale policykit-1"));
     }

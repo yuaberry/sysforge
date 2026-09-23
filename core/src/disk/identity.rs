@@ -5,13 +5,13 @@
 //! OUTRO disco; um `wipefs` às cegas apagaria o disco errado. Por isso
 //! toda operação destrutiva carrega a `DiskIdentity` do PLANEJAMENTO e
 //! revalida modelo+serial+ tamanho MILISSEGUNDOS antes de executar.
-//! Qualquer divergência → YUA-DISK-009 → operação abortada.
+//! Qualquer divergência → SF-DISK-009 → operação abortada.
 
 use serde::{Deserialize, Serialize};
 
 use crate::disk::lsblk::{self, LsblkDevice};
 use crate::disk::udev::enrich_from_udev;
-use crate::error::{ErrorDomain, YuaError};
+use crate::error::{ErrorDomain, SysforgeError};
 use crate::executor::Executor;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,7 +28,7 @@ pub struct DiskIdentity {
 
 impl DiskIdentity {
     /// Sondagem real via lsblk (+ enriquecimento udev para serial/model).
-    pub fn probe(executor: &Executor, path: &str) -> Result<Self, YuaError> {
+    pub fn probe(executor: &Executor, path: &str) -> Result<Self, SysforgeError> {
         let mut dev = lsblk::probe_device(executor, path)?;
         enrich_from_udev(&mut dev);
         Ok(Self::from_device(&dev))
@@ -62,8 +62,8 @@ impl DiskIdentity {
     }
 
     /// Revalida a identidade AGORA (nova sondagem) contra a registrada.
-    /// Divergência de model/serial/size → YUA-DISK-009 (abortar).
-    pub fn revalidate_now(&self) -> Result<(), YuaError> {
+    /// Divergência de model/serial/size → SF-DISK-009 (abortar).
+    pub fn revalidate_now(&self) -> Result<(), SysforgeError> {
         if self.synthetic {
             tracing::warn!(disk = %self.path, "revalidate_now chamado em identidade sintética (fixture de teste)");
             return Ok(());
@@ -74,7 +74,7 @@ impl DiskIdentity {
             || current.serial != self.serial
             || current.size_bytes != self.size_bytes
         {
-            return Err(YuaError::new(
+            return Err(SysforgeError::new(
                 ErrorDomain::Disk,
                 9,
                 format!(
@@ -119,6 +119,6 @@ mod tests {
     fn probe_missing_disk_is_disk_001() {
         let ex = Executor::default();
         let err = DiskIdentity::probe(&ex, "/dev/nonexistent-disk-x").unwrap_err();
-        assert_eq!(err.code, "YUA-DISK-001");
+        assert_eq!(err.code, "SF-DISK-001");
     }
 }

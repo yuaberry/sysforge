@@ -3011,6 +3011,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "sysforge-core"
+version = "1.1.0"
+dependencies = [
+ "chrono",
+ "libc",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.20",
+ "toml 0.8.2",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "sysforge-desktop"
+version = "1.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sysforge-core",
+ "tauri",
+ "tauri-build",
+]
+
+[[package]]
 name = "system-deps"
 version = "6.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4511,32 +4537,6 @@ dependencies = [
  "quote",
  "syn 3.0.6",
  "synstructure",
-]
-
-[[package]]
-name = "yua-core"
-version = "1.0.1"
-dependencies = [
- "chrono",
- "libc",
- "serde",
- "serde_json",
- "sha2",
- "thiserror 2.0.20",
- "toml 0.8.2",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "yua-desktop"
-version = "1.0.1"
-dependencies = [
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "yua-core",
 ]
 
 [[package]]

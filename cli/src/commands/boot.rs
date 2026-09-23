@@ -1,4 +1,4 @@
-//! `yua boot` — leitura UEFI + CONTROLE REAL: BootNext one-shot,
+//! `sysforge boot` — leitura UEFI + CONTROLE REAL: BootNext one-shot,
 //! reboot-direto-no-BIOS (OsIndications) e limpeza de entradas mortas.
 
 use std::io::Write;
@@ -6,24 +6,24 @@ use std::path::PathBuf;
 
 use serde_json::json;
 
-use yua_core::boot::efi::read_efi_state;
-use yua_core::boot::esp::read_esp;
-use yua_core::error::{ErrorDomain, YuaError};
-use yua_core::executor::Executor;
-use yua_core::hw::system::read_secure_boot;
-use yua_core::ipc::client::YuaClient;
-use yua_core::ipc::protocol::{
+use sysforge_core::boot::efi::read_efi_state;
+use sysforge_core::boot::esp::read_esp;
+use sysforge_core::error::{ErrorDomain, SysforgeError};
+use sysforge_core::executor::Executor;
+use sysforge_core::hw::system::read_secure_boot;
+use sysforge_core::ipc::client::YuaClient;
+use sysforge_core::ipc::protocol::{
     METHOD_BOOT_ARM_FIRMWARE, METHOD_BOOT_CLEAR_NEXT, METHOD_BOOT_REBOOT_TO_FIRMWARE,
     METHOD_BOOT_REMOVE_ENTRY, METHOD_BOOT_SET_NEXT,
 };
-use yua_core::power::firmware_reboot_supported;
+use sysforge_core::power::firmware_reboot_supported;
 
 use crate::commands::daemon::ensure_system_daemon;
 use crate::ui::{self, paint};
 
 use crate::BootAction;
 
-pub fn run(json: bool, color: bool, action: Option<BootAction>) -> Result<(), YuaError> {
+pub fn run(json: bool, color: bool, action: Option<BootAction>) -> Result<(), SysforgeError> {
     match action {
         None => show(json, color),
         Some(BootAction::Next { entry, clear }) => next(json, color, entry, clear),
@@ -32,7 +32,7 @@ pub fn run(json: bool, color: bool, action: Option<BootAction>) -> Result<(), Yu
     }
 }
 
-fn show(json: bool, color: bool) -> Result<(), YuaError> {
+fn show(json: bool, color: bool) -> Result<(), SysforgeError> {
     let exec = Executor::default();
     let state = read_efi_state(&exec)?;
     let esp = read_esp();
@@ -104,19 +104,19 @@ fn show(json: bool, color: bool) -> Result<(), YuaError> {
 
     println!();
     println!(
-        "  {} controle: `yua boot next <ID>` · `yua boot firmware` (reinicia na BIOS) · `yua boot remove <ID>`",
+        "  {} controle: `sysforge boot next <ID>` · `sysforge boot firmware` (reinicia na BIOS) · `sysforge boot remove <ID>`",
         ui::tag_info(color)
     );
     Ok(())
 }
 
-fn connect_system(color: bool) -> Result<(PathBuf, YuaClient), YuaError> {
+fn connect_system(color: bool) -> Result<(PathBuf, YuaClient), SysforgeError> {
     let sock = ensure_system_daemon(color)?;
     let client = YuaClient::connect(&sock)?;
     Ok((sock, client))
 }
 
-fn next(json: bool, color: bool, entry: Option<String>, clear: bool) -> Result<(), YuaError> {
+fn next(json: bool, color: bool, entry: Option<String>, clear: bool) -> Result<(), SysforgeError> {
     if clear {
         let (_, mut client) = connect_system(color)?;
         let r = client.call_interactive(METHOD_BOOT_CLEAR_NEXT, json!({"confirm": true}))?;
@@ -139,12 +139,12 @@ fn next(json: bool, color: bool, entry: Option<String>, clear: bool) -> Result<(
                 .usb_entry_id()
                 .map(|s| s.to_string())
                 .ok_or_else(|| {
-                    YuaError::new(
+                    SysforgeError::new(
                         ErrorDomain::Boot,
                         6,
                         "Nenhuma entrada USB encontrada para auto-detectar",
                     )
-                    .with_recommendation("Passe o ID explícito (`yua boot` lista os IDs) ou conecte o pendrive e tente de novo.")
+                    .with_recommendation("Passe o ID explícito (`sysforge boot` lista os IDs) ou conecte o pendrive e tente de novo.")
                 })?
         }
     };
@@ -166,15 +166,15 @@ fn next(json: bool, color: bool, entry: Option<String>, clear: bool) -> Result<(
         println!("      {} snapshot prévio: {}", paint("·", "dim", color), snap);
     }
     println!(
-        "      {} reiniciar agora: `yua power reboot --confirm`",
+        "      {} reiniciar agora: `sysforge power reboot --confirm`",
         paint("→", "cyan", color)
     );
     Ok(())
 }
 
-fn firmware(json: bool, color: bool, arm_only: bool) -> Result<(), YuaError> {
+fn firmware(json: bool, color: bool, arm_only: bool) -> Result<(), SysforgeError> {
     if !firmware_reboot_supported() {
-        return Err(YuaError::new(
+        return Err(SysforgeError::new(
             ErrorDomain::Uefi,
             1,
             "Este firmware não suporta reboot-direto-no-setup",
@@ -215,19 +215,19 @@ fn firmware(json: bool, color: bool, arm_only: bool) -> Result<(), YuaError> {
     Ok(())
 }
 
-fn remove(json: bool, color: bool, entry: String) -> Result<(), YuaError> {
+fn remove(json: bool, color: bool, entry: String) -> Result<(), SysforgeError> {
     // Mostra o que será removido ANTES de pedir confirmação digitada.
     let state = read_efi_state(&Executor::default())?;
     let Some(e) = state.entry(&entry) else {
-        return Err(YuaError::new(
+        return Err(SysforgeError::new(
             ErrorDomain::Boot,
             3,
             format!("Entrada de boot {entry} não existe"),
         )
-        .with_recommendation("`yua boot` lista os IDs válidos."));
+        .with_recommendation("`sysforge boot` lista os IDs válidos."));
     };
     if e.is_firmware_internal() {
-        return Err(YuaError::new(
+        return Err(SysforgeError::new(
             ErrorDomain::Boot,
             5,
             format!("{} é entrada INTERNA do firmware — intocável", e.name),

@@ -1,4 +1,4 @@
-/* YUA OS MANAGER — design tokens (grafite + violeta) */
+/* SYSFORGE — design tokens (grafite + violeta) */
 
 :root {
   --bg: #0f1115;
@@ -139,3 +139,24 @@ code { font-family: var(--mono); background: var(--bg-elev); padding: 1px 6px; b
 .action.working { color: var(--info); }
 .action.ok { color: var(--ok); }
 .action.err { color: var(--err); }
+
+/* ── Cartões de alvo de instalação (página Instalar Sistema) ── */
+.target-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.target-card {
+  border: 1px solid var(--border, #2a2f3a);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.target-card.active { border-color: #4ade80; }
+.target-card.soon { opacity: 0.75; }
+.target-card strong { font-size: 0.95rem; }
+.target-card span { font-size: 0.8rem; opacity: 0.8; line-height: 1.35; }

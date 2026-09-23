@@ -1,4 +1,4 @@
-# IMPLEMENTATION STATUS — YUA OS MANAGER
+# IMPLEMENTATION STATUS — SYSFORGE
 
 Auditoria honesta do projeto. Nada aqui é inflado: cada item marcado tem
 verificação executável associada.
@@ -18,57 +18,57 @@ Legenda:
 verde (tsc + vite) · CLI funcional contra o hardware real.
 
 ### [x] Workspace e consolidação
-- [x] Repo consolidado em `~/yua-os-manager/` (workspace: core, daemon, cli;
+- [x] Repo consolidado em `~/sysforge/` (workspace: core, daemon, cli;
       app desktop excluído até instalação dos headers — decisão consciente)
 - [x] `.gitignore` cobrindo target/, node_modules/, dist/, .env*
 
-### [x] Núcleo (`yua-core`)
-- [x] Erros codificados `YUA-{DISK,BOOT,IMAGE,NET,UEFI,WIN,DEP,AUTH,STATE,...}-NNN`
+### [x] Núcleo (`sysforge-core`)
+- [x] Erros codificados `SF-{DISK,BOOT,IMAGE,NET,UEFI,WIN,DEP,AUTH,STATE,...}-NNN`
       com mensagem + técnico + recomendação (testado)
 - [x] Executor: `program+args` SEM shell · `LC_ALL=C` · timeout · log estruturado
 - [x] Classes de risco: ReadOnly / LowRisk / Destructive
 - [x] Modo DryRun (read-only roda de verdade; destrutivo apenas `WOULD_RUN`) — testado
 - [x] **Host-disk guard**: destrutivo no disco do rootfs vivo recusado
-      (`YUA-DISK-010`) — testado contra o /dev/sda REAL desta máquina
-- [x] Destrutivo exige `operation_id` (`YUA-STATE-001`) — testado
-- [x] Identidade de disco com revalidação anti-hot-plug (`YUA-DISK-009`) —
+      (`SF-DISK-010`) — testado contra o /dev/sda REAL desta máquina
+- [x] Destrutivo exige `operation_id` (`SF-STATE-001`) — testado
+- [x] Identidade de disco com revalidação anti-hot-plug (`SF-DISK-009`) —
       probe real retorna serial WX61A79A2TDH do WDC — testado
 - [x] State machine com grafo explícito + persistência atômica (tmp+fsync+rename)
-      + checksum SHA-256 anti-adulteração (`YUA-STATE-003`) — testado
+      + checksum SHA-256 anti-adulteração (`SF-STATE-003`) — testado
 - [x] `hw/system`: os-release, meminfo, cpuinfo, uptime, bateria/AC, TPM,
       UEFI, Secure Boot (offset 4 do efivar) — parsers testados
 - [x] `disk/lsblk`: parser do JSON real (util-linux 2.39, `mountpoints` array) — testado c/ fixture real
 - [x] `disk/udev`: leitura de `/run/udev/data/b{maj}:{min}` sem root — testado ao vivo
-- [x] `disk/blkid`, `disk/smart` (honesto: YUA-DEP-005/006 quando indisponível) — testado
+- [x] `disk/blkid`, `disk/smart` (honesto: SF-DEP-005/006 quando indisponível) — testado
 - [x] `boot/efi`: parser efibootmgr completo (mesma-linha + continuação) — testado c/ fixture real
 - [x] `boot/esp`: /proc/mounts + statvfs + detecção de permissão restrita — testado ao vivo
 - [x] `capability`: probe de 30 ferramentas + KVM/OVMF/memtest + headers Tauri — testado
 - [x] `ipc/protocol`: NDJSON Request/Response/WireError + registro destrutivo — testado
 - [x] `ipc/client`: cliente unix socket com timeout e mapeamento de erro
 
-### [x] Daemon (`yua-osd`)
-- [x] Modo dev: socket 0600, mesmo-uid via SO_PEERCRED, **destrutivo recusado fail-closed (YUA-AUTH-002)**
+### [x] Daemon (`sysforge-osd`)
+- [x] Modo dev: socket 0600, mesmo-uid via SO_PEERCRED, **destrutivo recusado fail-closed (SF-AUTH-002)**
 - [x] Modo system: exige root; auditoria JSONL de TODA chamada
 - [x] 6 métodos v1 read-only publicados (echo, system.info, disks.list, efi.entries, capabilities, daemon.info)
 - [x] Integração IPC ponta a ponta testada (spawn real do binário + cliente + fail-closed verificado)
 
-### [x] CLI (`yua`)
+### [x] CLI (`sysforge`)
 - [x] Executável de terminal SEPARADO com efeitos: banner gradiente ANSI,
       spinner braille, tabelas box-drawing, barras, badges — respeitando NO_COLOR/pipe
 - [x] Comandos: `status`, `disks`, `boot`, `doctor`, `daemon`, `logs`
 - [x] `--json` global para scripts; saída de erro estruturada com código
 - [x] `doctor`: 10 verificações com spinner + comando apt EXATO para o que falta
-- [x] Logs em `~/.local/share/yua-os-manager/logs/`
+- [x] Logs em `~/.local/share/sysforge/logs/`
 
 ### [x] App desktop (frontend)
 - [x] React 18 + Vite 5 + TS 5 + react-router-dom 6 (build verde)
 - [x] Dashboard/Discos/Boot/Diagnóstico com dados reais via Tauri commands in-process
 - [x] Páginas futuras = estado honesto "planejado — fase N" (zero UI falsa)
-- [x] Erro de bridge honesto (YUA-BRIDGE-001) quando fora do Tauri
-- [x] src-tauri renomeado: `yua-desktop` / `dev.yua.osmanager` / janela 1400×900
+- [x] Erro de bridge honesto (SF-BRIDGE-001) quando fora do Tauri
+- [x] src-tauri renomeado: `sysforge-desktop` / `com.sysforge.desktop` / janela 1400×900
 
 ### [x] Deploy e docs
-- [x] `deploy/systemd/`: yua-osd.socket + yua-osd.service (hardening) + com.yua.osd.policy
+- [x] `deploy/systemd/`: sysforge-osd.socket + sysforge-osd.service (hardening) + com.sysforge.osd.policy
 - [x] `scripts/bootstrap-linux.sh` (--check e instalação) e `scripts/install-daemon.sh`
 - [x] docs: README, ARCHITECTURE, SECURITY, DEVELOPMENT
 
@@ -78,8 +78,8 @@ verde (tsc + vite) · CLI funcional contra o hardware real.
       O workspace core/daemon/CLI compila e é 100% testável sem isto.
 - [!] **Deps de runtime opcionais** (smartmontools, qemu, xorriso, wimtools, mtools, ovmf,
       memtest86+, testdisk, nvme-cli): ausentes → funcionalidades reportam indisponibilidade
-      honesta (YUA-DEP-005…). Mesma resolução: bootstrap-linux.sh.
-- [!] **Métodos destrutivos**: INTENCIONALMENTE não implementados (fail-closed, YUA-AUTH-004).
+      honesta (SF-DEP-005…). Mesma resolução: bootstrap-linux.sh.
+- [!] **Métodos destrutivos**: INTENCIONALMENTE não implementados (fail-closed, SF-AUTH-004).
       Chegam na Fase 2 via polkit + Fase 9 (testes QEMU).
 
 ---
@@ -87,26 +87,26 @@ verde (tsc + vite) · CLI funcional contra o hardware real.
 ## Fase 2 (parcial) — Controle de boot/energia + fluxo Windows 11 ✅
 
 **Prova executável:** 50 testes verdes (46 core + 3 auth pkcheck + 1 integração) ·
-`yua winstall` roda checklist real (UEFI/TPM/ISO/USB/Ventoy/OsIndications/daemon) ·
-`yua boot` marca entradas mortas (WIN_INSTALL `File()` vazio) · build do frontend verde.
+`sysforge install` roda checklist real (UEFI/TPM/ISO/USB/Ventoy/OsIndications/daemon) ·
+`sysforge boot` marca entradas mortas (WIN_INSTALL `File()` vazio) · build do frontend verde.
 
 ### [x] Controle REAL de energia e BIOS
 - [x] "Reiniciar direto na BIOS": `OsIndications` (bit BOOT_TO_FIRMWARE_UI) —
       mecanismo UEFI oficial, confirmado suportado pelo firmware deste Vostro (testado)
-- [x] `yua boot firmware` (reboot→setup) / `--arm` (só arma o próximo boot)
-- [x] `yua power reboot|off --confirm` (via systemctl, root)
+- [x] `sysforge boot firmware` (reboot→setup) / `--arm` (só arma o próximo boot)
+- [x] `sysforge power reboot|off --confirm` (via systemctl, root)
 - [x] Daemon system via **pkexec** — polkit pede a senha na tela do usuário
-- [x] Autorização por método: **pkcheck** com pid+starttime (SO_PEERCRED) — YUA-AUTH-005
+- [x] Autorização por método: **pkcheck** com pid+starttime (SO_PEERCRED) — SF-AUTH-005
 
 ### [x] Boot controlado
 - [x] `v1.boot.set_next`: BootNext ONE-SHOT com snapshot prévio; **BootOrder nunca escrito**
-- [x] `yua boot next` (auto-detecta entrada USB 0012 do firmware nesta máquina)
-- [x] `yua boot remove <ID>`: guarda de internas do firmware (FvFile/VenMsg intocáveis) +
+- [x] `sysforge boot next` (auto-detecta entrada USB 0012 do firmware nesta máquina)
+- [x] `sysforge boot remove <ID>`: guarda de internas do firmware (FvFile/VenMsg intocáveis) +
       confirmação digitada + snapshot
 - [x] Snapshot do estado UEFI (`efibootmgr -v`) antes de QUALQUER mutação
 
 ### [x] Fluxo Windows 11 (o objetivo declarado do usuário)
-- [x] `yua winstall`: checklist honesto com 9 sondagens reais
+- [x] `sysforge install`: checklist honesto com 9 sondagens reais
 - [x] Gerador `autounattend.xml`: bypass LabConfig (TPM/SecureBoot/RAM/CPU — hardware
       antigo instala), locale pt-BR, edição Pro/Home por chave genérica, **zero senhas no XML**
 - [x] Modo full-wipe (apaga disco 0 na instalação) exige confirmação DIGITADA "APAGAR"
@@ -130,7 +130,7 @@ verde (tsc + vite) · CLI funcional contra o hardware real.
 - [!] **ISO do Windows 11**: ausente (6+ GiB) — download manual do link oficial
       (o checklist mostra) e salvar em ~/Downloads.
 - [!] **Pendrive**: nenhum conectado — inserir um com Ventoy (o checklist detecta).
-- [!] **Métodos destrutivos** (wipe/format/deploy): recusados por projeto (YUA-AUTH-004)
+- [!] **Métodos destrutivos** (wipe/format/deploy): recusados por projeto (SF-AUTH-004)
       até a fase de deploy com plano validado + rollback + testes QEMU.
 
 ---
@@ -175,7 +175,7 @@ _Última atualização: Fase 1 concluída neste ambiente (workspace compilando, 
 
 ## Concluído
 - [x] Fase 1: workspace, 50 testes reais, CLI funcional (validada em produção nesta máquina)
-- [x] Fase 2: energia (systemd-logind), reboot→BIOS via OsIndications (firmware suporta BOOT_TO_FIRMWARE_UI — testado), snapshot UEFI pré-mutação, fluxo `yua winstall` completo (checklist honesto 9 sondagens → autounattend.xml real com bypass LabConfig → BootNext one-shot)
+- [x] Fase 2: energia (systemd-logind), reboot→BIOS via OsIndications (firmware suporta BOOT_TO_FIRMWARE_UI — testado), snapshot UEFI pré-mutação, fluxo `sysforge install` completo (checklist honesto 9 sondagens → autounattend.xml real com bypass LabConfig → BootNext one-shot)
 - [x] Daemon system validado ao vivo: pkexec + polkit autorizados pelo usuário (3×), SO_PEERCRED, auditoria JSONL
 - [x] App desktop Tauri 2 + React compilado e EXECUTANDO nesta máquina (Dashboard/Discos/Boot/Windows/Doctor)
 - [x] Fase 10: `.deb` único com app+CLI+daemon+policy polkit+systemd socket activation+menu+ícones (`scripts/package-deb.sh`)
@@ -183,14 +183,14 @@ _Última atualização: Fase 1 concluída neste ambiente (workspace compilando, 
 
 ## Lições de campo (causa raiz, não paliativo)
 - pkexec limpa o ambiente → executor com PATH determinístico (evita 127 em systemctl/efibootmgr/pkcheck)
-- pkcheck 127 = ação polkit desconhecida OU sem diálogo disponível → a policy com.yua.osd PRECISA estar instalada (install-daemon.sh / .deb postinst); mensagem YUA-AUTH-005 agora explica exatamente isso
+- pkcheck 127 = ação polkit desconhecida OU sem diálogo disponível → a policy com.sysforge.osd PRECISA estar instalada (install-daemon.sh / .deb postinst); mensagem SF-AUTH-005 agora explica exatamente isso
 - Agente de diálogo polkit é pré-requisito para o APP (sem TTY): autostart + doctor check #11
 - App sem o handler registrado compila com warning — tratado como bug (unattend_save fora do generate_handler! → corrigido)
 
 ## Pendências
-- [ ] Instalar o .deb na máquina-alvo (1 senha: `sudo apt install ~/Downloads/yua-os-manager_1.0.0_amd64.deb`) → valida yua doctor + socket activation
-- [ ] Publicar release no GitHub (gh auth login do usuário) → asset: yua-os-manager_1.0.0_amd64.deb (3.2 MB)
-- [ ] Download da ISO Win11 + pendrive Ventoy → `yua winstall` tudo verde → `--apply --full-wipe --reboot`
+- [ ] Instalar o .deb na máquina-alvo (1 senha: `sudo apt install ~/Downloads/sysforge_1.0.0_amd64.deb`) → valida sysforge doctor + socket activation
+- [ ] Publicar release no GitHub (gh auth login do usuário) → asset: sysforge_1.0.0_amd64.deb (3.2 MB)
+- [ ] Download da ISO Win11 + pendrive Ventoy → `sysforge install` tudo verde → `--apply --full-wipe --reboot`
 - Fases 6/7/8/9 conforme roadmap (não bloqueiam 1.0.0)
 
 _Última atualização: Release 1.0.0 empacotada; app executando na máquina do usuário._

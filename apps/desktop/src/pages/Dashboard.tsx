@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { backend, toBackendError, fmtBytes, fmtUptime } from '../lib/yua';
+import { backend, toBackendError, fmtBytes, fmtUptime } from '../lib/sysforge';
 import type { BackendError, EfiBootState, EspInfo, SystemInfo } from '../types';
 
 type Loadable<T> = { state: 'loading' } | { state: 'error'; error: BackendError } | { state: 'ok'; data: T };
@@ -116,7 +116,7 @@ export default function Dashboard() {
                 mono
               />
             ) : (
-              esp.state === 'ok' && <KV k="ESP" v={<Badge kind="err">não montada (YUA-BOOT-002)</Badge>} />
+              esp.state === 'ok' && <KV k="ESP" v={<Badge kind="err">não montada (SF-BOOT-002)</Badge>} />
             )}
             {efi.state === 'ok' && bootEntry && (
               <KV k="Boot atual" v={`${bootEntry.id} · ${bootEntry.name}`} mono />

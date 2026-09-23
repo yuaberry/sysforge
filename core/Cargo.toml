@@ -1,13 +1,13 @@
 [package]
-name = "yua-core"
-description = "YUA OS Manager core library: models, executor, state machine, hardware/disk/boot engines"
+name = "sysforge-core"
+description = "SYSFORGE OS Manager core library: models, executor, state machine, hardware/disk/boot engines"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
 [lib]
-name = "yua_core"
+name = "sysforge_core"
 path = "src/lib.rs"
 
 [dependencies]

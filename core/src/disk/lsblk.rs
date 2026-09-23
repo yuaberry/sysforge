@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{ErrorDomain, YuaError};
+use crate::error::{ErrorDomain, SysforgeError};
 use crate::executor::{CommandSpec, Executor};
 
 /// Colunas fixas — nomes estáveis entre versões suportadas.
@@ -82,7 +82,7 @@ struct LsblkRoot {
 }
 
 /// Parser puro do JSON do lsblk (testável sem executar nada).
-pub fn parse_lsblk_json(json: &str) -> Result<Vec<LsblkDevice>, YuaError> {
+pub fn parse_lsblk_json(json: &str) -> Result<Vec<LsblkDevice>, SysforgeError> {
     let root: LsblkRoot = serde_json::from_str(json)?;
     Ok(root.blockdevices)
 }
@@ -101,20 +101,20 @@ fn lsblk_spec(executor_extra: Option<String>) -> CommandSpec {
 }
 
 /// Árvore completa de dispositivos de bloco.
-pub fn list_blockdevices(executor: &Executor) -> Result<Vec<LsblkDevice>, YuaError> {
+pub fn list_blockdevices(executor: &Executor) -> Result<Vec<LsblkDevice>, SysforgeError> {
     let r = executor.run_readonly(lsblk_spec(None))?;
     if !r.success() {
-        return Err(YuaError::command_failed("lsblk", &[], r.exit_code, &r.stderr));
+        return Err(SysforgeError::command_failed("lsblk", &[], r.exit_code, &r.stderr));
     }
     parse_lsblk_json(&r.stdout)
 }
 
  /// Dispositivo único (disco OU partição) por caminho /dev/....
-pub fn probe_device(executor: &Executor, path: &str) -> Result<LsblkDevice, YuaError> {
+pub fn probe_device(executor: &Executor, path: &str) -> Result<LsblkDevice, SysforgeError> {
     let r = executor.run_readonly(lsblk_spec(Some(path.to_string())))?;
     if !r.success() {
         return Err(
-            YuaError::new(ErrorDomain::Disk, 1, format!("Dispositivo {path} não encontrado"))
+            SysforgeError::new(ErrorDomain::Disk, 1, format!("Dispositivo {path} não encontrado"))
                 .with_technical(format!("lsblk saiu com {:?}: {}", r.exit_code, r.stderr.trim()))
                 .with_recommendation("Verifique se o dispositivo está conectado e o caminho está correto (ex.: /dev/sdb)."),
         );
@@ -122,7 +122,7 @@ pub fn probe_device(executor: &Executor, path: &str) -> Result<LsblkDevice, YuaE
     let devs = parse_lsblk_json(&r.stdout)?;
     devs.into_iter()
         .next()
-        .ok_or_else(|| YuaError::new(ErrorDomain::Disk, 1, format!("lsblk não retornou dados para {path}")))
+        .ok_or_else(|| SysforgeError::new(ErrorDomain::Disk, 1, format!("lsblk não retornou dados para {path}")))
 }
 
 #[cfg(test)]

@@ -1,8 +1,8 @@
 import { useBackend, Card, ErrorCard, Skeleton, KV, Badge } from './Dashboard';
-import { fmtBytes } from '../lib/yua';
+import { fmtBytes } from '../lib/sysforge';
 import type { LsblkDevice, SmartReport } from '../types';
 import { useEffect, useState } from 'react';
-import { backend, toBackendError } from '../lib/yua';
+import { backend, toBackendError } from '../lib/sysforge';
 import type { BackendError } from '../types';
 
 function SmartLine({ disk }: { disk: string }) {
@@ -101,7 +101,7 @@ export default function DisksPage() {
       {disks.state === 'ok' && (
         <p className="foot-note">
           Guard de segurança ativo: operações destrutivas no disco do sistema vivo são recusadas por
-          código (YUA-DISK-010). Testes destrutivos reais ocorrerão apenas em VMs (Fase 9).
+          código (SF-DISK-010). Testes destrutivos reais ocorrerão apenas em VMs (Fase 9).
         </p>
       )}
     </div>

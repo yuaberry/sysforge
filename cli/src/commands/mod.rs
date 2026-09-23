@@ -5,4 +5,4 @@ pub mod doctor;
 pub mod logs;
 pub mod power;
 pub mod status;
-pub mod winstall;
+pub mod install;

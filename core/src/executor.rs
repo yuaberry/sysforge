@@ -25,7 +25,7 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use crate::disk::identity::DiskIdentity;
-use crate::error::{ErrorDomain, YuaError};
+use crate::error::{ErrorDomain, SysforgeError};
 
 /// Classe de risco da operação. Determina autorização no daemon.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -149,11 +149,11 @@ impl ExecResult {
         self.exit_code == Some(0)
     }
 
-    pub fn error_if_failed(&self) -> Result<&ExecResult, YuaError> {
+    pub fn error_if_failed(&self) -> Result<&ExecResult, SysforgeError> {
         if self.success() {
             Ok(self)
         } else {
-            Err(YuaError::command_failed(
+            Err(SysforgeError::command_failed(
                 &self.program,
                 &[],
                 self.exit_code,
@@ -197,13 +197,13 @@ impl Executor {
 
     /// Executa um comando de classe read-only.
     /// Executa SEMPRE (inclusive em DryRun — dados precisam ser reais).
-    pub fn run_readonly(&self, spec: CommandSpec) -> Result<ExecResult, YuaError> {
+    pub fn run_readonly(&self, spec: CommandSpec) -> Result<ExecResult, SysforgeError> {
         self.run(spec, Risk::ReadOnly)
     }
 
     /// Executa um comando de baixo risco (reversível).
     /// Em DryRun apenas registra `WOULD_RUN`.
-    pub fn run_low_risk(&self, spec: CommandSpec) -> Result<ExecResult, YuaError> {
+    pub fn run_low_risk(&self, spec: CommandSpec) -> Result<ExecResult, SysforgeError> {
         self.run(spec, Risk::LowRisk)
     }
 
@@ -214,9 +214,9 @@ impl Executor {
         spec: CommandSpec,
         identity: &DiskIdentity,
         operation_id: &str,
-    ) -> Result<ExecResult, YuaError> {
+    ) -> Result<ExecResult, SysforgeError> {
         if operation_id.trim().is_empty() {
-            return Err(YuaError::new(
+            return Err(SysforgeError::new(
                 ErrorDomain::State,
                 1,
                 "Operação destrutiva sem operation_id registrado",
@@ -232,7 +232,7 @@ impl Executor {
                 .unwrap_or_else(|| identity.path.clone());
             if targets_same_disk(&target_disk, &host_disk) && !self.allow_host_disk_destructive
             {
-                return Err(YuaError::new(
+                return Err(SysforgeError::new(
                     ErrorDomain::Disk,
                     10,
                     "Operação destrutiva recusada: o alvo é o disco do sistema em execução",
@@ -260,7 +260,7 @@ impl Executor {
         self.run(spec, Risk::Destructive)
     }
 
-    fn run(&self, spec: CommandSpec, risk: Risk) -> Result<ExecResult, YuaError> {
+    fn run(&self, spec: CommandSpec, risk: Risk) -> Result<ExecResult, SysforgeError> {
         let started = Instant::now();
 
         // Dry-run: read-only executa de verdade; o resto é apenas registrado.
@@ -281,13 +281,13 @@ impl Executor {
 
         tracing::debug!(risk = risk.label(), "EXEC: {}", spec.display());
         let mut child = spec.build_command().spawn().map_err(|e| {
-            YuaError::new(
+            SysforgeError::new(
                 ErrorDomain::Dep,
                 2,
                 format!("Não foi possível executar `{}`", spec.program),
             )
             .with_technical(e.to_string())
-            .with_recommendation("Verifique se o binário existe (`yua doctor` verifica dependências).")
+            .with_recommendation("Verifique se o binário existe (`sysforge doctor` verifica dependências).")
         })?;
 
         // Timeout via polling (sem crates extras).
@@ -299,7 +299,7 @@ impl Executor {
                     if Instant::now() >= deadline {
                         let _ = child.kill();
                         let _ = child.wait();
-                        return Err(YuaError::new(
+                        return Err(SysforgeError::new(
                             ErrorDomain::Io,
                             4,
                             format!("`{}` excedeu o tempo limite de {:?}s", spec.program, spec.timeout.as_secs()),
@@ -419,13 +419,13 @@ mod tests {
         // Destrutivo em DryRun NÃO executa.
         let r = ex
             .run_destructive(
-                CommandSpec::new("sh").arg("-c").arg("echo destroyed > /tmp/yua-should-not-exist"),
+                CommandSpec::new("sh").arg("-c").arg("echo destroyed > /tmp/sysforge-should-not-exist"),
                 &DiskIdentity::synthetic_for_tests("/dev/zzz9"),
                 "op-test-1",
             )
             .unwrap();
         assert!(r.simulated);
-        assert!(!Path::new("/tmp/yua-should-not-exist").exists());
+        assert!(!Path::new("/tmp/sysforge-should-not-exist").exists());
     }
 
     #[test]
@@ -442,7 +442,7 @@ mod tests {
                 "op-guard-test",
             )
             .unwrap_err();
-        assert_eq!(err.code, "YUA-DISK-010", "deve recusar destrutivo no disco do rootfs vivo");
+        assert_eq!(err.code, "SF-DISK-010", "deve recusar destrutivo no disco do rootfs vivo");
     }
 
     #[test]
@@ -462,6 +462,6 @@ mod tests {
                 "",
             )
             .unwrap_err();
-        assert_eq!(err.code, "YUA-STATE-001");
+        assert_eq!(err.code, "SF-STATE-001");
     }
 }

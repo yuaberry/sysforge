@@ -11,7 +11,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{ErrorDomain, YuaError};
+use crate::error::{ErrorDomain, SysforgeError};
 
 /// Chaves genéricas de instalação (públicas, da documentação Microsoft —
 /// não ativam nada, apenas selecionam a edição).
@@ -61,9 +61,9 @@ fn product_key(edition: &str) -> &'static str {
 }
 
 /// Gera o autounattend.xml completo como String.
-pub fn generate_autounattend(cfg: &UnattendConfig) -> Result<String, YuaError> {
+pub fn generate_autounattend(cfg: &UnattendConfig) -> Result<String, SysforgeError> {
     if !matches!(cfg.edition.to_lowercase().as_str(), "home" | "pro") {
-        return Err(YuaError::new(
+        return Err(SysforgeError::new(
             ErrorDomain::NotSupported,
             2,
             format!("Edição desconhecida: {}", cfg.edition),
@@ -95,7 +95,7 @@ pub fn generate_autounattend(cfg: &UnattendConfig) -> Result<String, YuaError> {
                 r#"        <RunSynchronousCommand wcm:action="add">
           <Order>{}</Order>
           <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v {} /t REG_DWORD /d 1 /f</Path>
-          <Description>YUA OS MANAGER: bypass de requisito oficial do Windows 11</Description>
+          <Description>SYSFORGE: bypass de requisito oficial do Windows 11</Description>
         </RunSynchronousCommand>
 "#,
                 i + 1,
@@ -158,7 +158,7 @@ pub fn generate_autounattend(cfg: &UnattendConfig) -> Result<String, YuaError> {
 
     Ok(format!(
         r#"<?xml version="1.0" encoding="utf-8"?>
-<!-- autounattend.xml gerado pelo YUA OS MANAGER -->
+<!-- autounattend.xml gerado pelo SYSFORGE -->
 <!-- ATENÇÃO{wipe_note}: este arquivo automatiza a instalação do Windows 11. -->
 <unattend xmlns="urn:schemas-microsoft-com:unattend">
   <settings pass="windowsPE">
@@ -190,7 +190,7 @@ pub fn generate_autounattend(cfg: &UnattendConfig) -> Result<String, YuaError> {
         <RunSynchronousCommand wcm:action="add">
           <Order>1</Order>
           <Path>reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE /v BypassNRO /t REG_DWORD /d 1 /f</Path>
-          <Description>YUA: permite conta local no OOBE (se o instalador pedir conta Microsoft, desconecte a rede)</Description>
+          <Description>SYSFORGE: permite conta local no OOBE (se o instalador pedir conta Microsoft, desconecte a rede)</Description>
         </RunSynchronousCommand>
       </RunSynchronous>
     </component>
@@ -265,6 +265,6 @@ mod tests {
     fn rejects_unknown_edition() {
         let mut cfg = UnattendConfig::default();
         cfg.edition = "enterprise-n".into();
-        assert_eq!(generate_autounattend(&cfg).unwrap_err().code, "YUA-NOTSUP-002");
+        assert_eq!(generate_autounattend(&cfg).unwrap_err().code, "SF-NOTSUP-002");
     }
 }

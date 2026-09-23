@@ -1,4 +1,4 @@
-//! `yua winstall` — fluxo REAL de instalação do Windows 11 nesta máquina:
+//! `sysforge install` — fluxo REAL de instalação do Windows 11 nesta máquina:
 //! checklist honesto → autounattend.xml → cópia p/ pendrive Ventoy →
 //! BootNext one-shot → reboot. O limite físico é dito com todas as letras:
 //! após o reboot, quem executa é o instalador do Windows com nossas respostas.
@@ -8,19 +8,20 @@ use std::path::{Path, PathBuf};
 
 use serde_json::json;
 
-use yua_core::boot::efi::read_efi_state;
-use yua_core::error::{ErrorDomain, YuaError};
-use yua_core::executor::Executor;
-use yua_core::ipc::client::YuaClient;
-use yua_core::ipc::protocol::{METHOD_BOOT_SET_NEXT, METHOD_SYSTEM_REBOOT};
-use yua_core::windows::checklist::{ItemStatus, run_checklist};
-use yua_core::windows::media::copy_with_progress;
-use yua_core::windows::unattend::{generate_autounattend, UnattendConfig, WINDOWS11_DOWNLOAD_URL};
+use sysforge_core::boot::efi::read_efi_state;
+use sysforge_core::error::{ErrorDomain, SysforgeError};
+use sysforge_core::executor::Executor;
+use sysforge_core::ipc::client::YuaClient;
+use sysforge_core::ipc::protocol::{METHOD_BOOT_SET_NEXT, METHOD_SYSTEM_REBOOT};
+use sysforge_core::windows::checklist::{ItemStatus, run_checklist};
+use sysforge_core::windows::media::copy_with_progress;
+use sysforge_core::windows::unattend::{generate_autounattend, UnattendConfig, WINDOWS11_DOWNLOAD_URL};
 
 use crate::commands::daemon::ensure_system_daemon;
 use crate::ui::{self, paint};
 
-pub struct WinstallOpts {
+pub struct InstallOpts {
+    pub target: String,
     pub apply: bool,
     pub iso: Option<String>,
     pub edition: String,
@@ -28,7 +29,19 @@ pub struct WinstallOpts {
     pub reboot: bool,
 }
 
-pub fn run(json: bool, color: bool, opts: WinstallOpts) -> Result<(), YuaError> {
+pub fn run(json: bool, color: bool, opts: InstallOpts) -> Result<(), SysforgeError> {
+    if opts.target != "windows11" {
+        return Err(SysforgeError::new(
+            sysforge_core::error::ErrorDomain::Dep,
+            9,
+            format!("Alvo `\u{200b}{}` ainda não é suportado pelo fluxo automatizado", opts.target),
+        )
+        .with_recommendation(
+            "Hoje: `--target windows11` (checklist real, autounattend, BootNext). \
+Linux (Ubuntu/Mint) e outros entram na próxima versão — a arquitetura de \
+mídia/checklist já é agnóstica de SO; falta o autoboot por distro.",
+        ));
+    }
     let ex = Executor::default();
     let checklist = run_checklist(&ex)?;
 
@@ -67,7 +80,7 @@ pub fn run(json: bool, color: bool, opts: WinstallOpts) -> Result<(), YuaError> 
 
     if !opts.apply {
         println!(
-            "\n  {} modo verificação. Aplique quando os itens estiverem verdes: `yua winstall --apply`",
+            "\n  {} modo verificação. Aplique quando os itens estiverem verdes: `sysforge install --apply`",
             paint("→", "cyan", color)
         );
         return Ok(());
@@ -116,7 +129,7 @@ pub fn run(json: bool, color: bool, opts: WinstallOpts) -> Result<(), YuaError> 
         Some(m) => Path::new(m).join("autounattend.xml"),
         None => std::env::var_os("HOME")
             .map(|h| PathBuf::from(h).join("Downloads").join("autounattend.xml"))
-            .ok_or_else(|| YuaError::new(ErrorDomain::Io, 2, "HOME não definido"))?,
+            .ok_or_else(|| SysforgeError::new(ErrorDomain::Io, 2, "HOME não definido"))?,
     };
     std::fs::write(&unattend_path, &xml)?;
     println!(
@@ -179,7 +192,7 @@ pub fn run(json: bool, color: bool, opts: WinstallOpts) -> Result<(), YuaError> 
             ui::tag_warn(color)
         );
         println!(
-            "      {} conecte o pendrive Ventoy e rode `yua winstall --apply` de novo",
+            "      {} conecte o pendrive Ventoy e rode `sysforge install --apply` de novo",
             paint("→", "cyan", color)
         );
     } else {
@@ -224,7 +237,7 @@ pub fn run(json: bool, color: bool, opts: WinstallOpts) -> Result<(), YuaError> 
         let _ = client.call_interactive(METHOD_SYSTEM_REBOOT, json!({"confirm": true}))?;
     } else {
         println!(
-            "\n  {} quando estiver pronto: `yua power reboot --confirm` (ou `yua winstall --apply --reboot`)",
+            "\n  {} quando estiver pronto: `sysforge power reboot --confirm` (ou `sysforge install --apply --reboot`)",
             paint("→", "cyan", color)
         );
     }

@@ -7,7 +7,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::disk::lsblk::list_blockdevices;
-use crate::error::YuaError;
+use crate::error::SysforgeError;
 use crate::executor::Executor;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,7 +24,7 @@ pub struct RemovableMedia {
 }
 
 /// Lista pendrives/SDs reais conectados (rm=true no lsblk).
-pub fn list_removable_media(executor: &Executor) -> Result<Vec<RemovableMedia>, YuaError> {
+pub fn list_removable_media(executor: &Executor) -> Result<Vec<RemovableMedia>, SysforgeError> {
     let devs = list_blockdevices(executor)?;
     let mut out = Vec::new();
     for d in devs.iter().filter(|d| d.is_disk() && d.rm.unwrap_or(false)) {
@@ -64,7 +64,7 @@ pub fn copy_with_progress<F: FnMut(u64, u64)>(
     src: &Path,
     dst: &Path,
     mut on_progress: F,
-) -> Result<u64, YuaError> {
+) -> Result<u64, SysforgeError> {
     let total = std::fs::metadata(src).map(|m| m.len()).unwrap_or(0);
     let mut f = std::fs::File::open(src)?;
     let mut out = std::fs::File::create(dst)?;
@@ -102,8 +102,8 @@ mod tests {
     #[test]
     fn copy_with_progress_reports_real_bytes() {
         let dir = std::env::temp_dir();
-        let src = dir.join(format!("yua-src-{}.bin", std::process::id()));
-        let dst = dir.join(format!("yua-dst-{}.bin", std::process::id()));
+        let src = dir.join(format!("sysforge-src-{}.bin", std::process::id()));
+        let dst = dir.join(format!("sysforge-dst-{}.bin", std::process::id()));
         let mut f = std::fs::File::create(&src).unwrap();
         f.write_all(&[7u8; 1024 * 256]).unwrap();
         drop(f);

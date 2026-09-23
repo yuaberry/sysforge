@@ -1,5 +1,5 @@
 //! Logging estruturado (tracing) com saída dupla: stderr + arquivo de log.
-//! Arquivos ficam em ~/.local/share/yua-os-manager/logs/.
+//! Arquivos ficam em ~/.local/share/sysforge/logs/.
 
 use std::fs::{File, OpenOptions};
 use std::io::Write as IoWrite;
@@ -79,11 +79,11 @@ pub fn init(log_file: Option<&Path>, default_filter: &str) {
     }
 }
 
-/// Caminho padrão do log do app: ~/.local/share/yua-os-manager/logs/yua.log
+/// Caminho padrão do log do app: ~/.local/share/sysforge/logs/sysforge.log
 pub fn default_app_log_file() -> Option<PathBuf> {
     let home = std::env::var_os("HOME")?;
     Some(
         PathBuf::from(home)
-            .join(".local/share/yua-os-manager/logs/yua.log"),
+            .join(".local/share/sysforge/logs/sysforge.log"),
     )
 }

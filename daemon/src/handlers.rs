@@ -1,25 +1,25 @@
-//! Despacho de métodos v1 — read-only direto do yua-core; privilegiados
+//! Despacho de métodos v1 — read-only direto do sysforge-core; privilegiados
 //! com TODAS as barreiras: snapshot prévio, confirmação explícita e guardas
 //! de entrada de boot.
 
 use serde_json::json;
 
-use yua_core::boot::efi::read_efi_state;
-use yua_core::boot::snapshot::BootSnapshot;
-use yua_core::capability::probe_capabilities;
-use yua_core::disk::lsblk::list_blockdevices;
-use yua_core::disk::udev::enrich_from_udev;
-use yua_core::error::{ErrorDomain, YuaError};
-use yua_core::executor::{CommandSpec, Executor};
-use yua_core::hw::system::probe_system_info;
-use yua_core::ipc::protocol::{
+use sysforge_core::boot::efi::read_efi_state;
+use sysforge_core::boot::snapshot::BootSnapshot;
+use sysforge_core::capability::probe_capabilities;
+use sysforge_core::disk::lsblk::list_blockdevices;
+use sysforge_core::disk::udev::enrich_from_udev;
+use sysforge_core::error::{ErrorDomain, SysforgeError};
+use sysforge_core::executor::{CommandSpec, Executor};
+use sysforge_core::hw::system::probe_system_info;
+use sysforge_core::ipc::protocol::{
     Request, Response, WireError, METHOD_BOOT_ARM_FIRMWARE, METHOD_BOOT_CLEAR_NEXT,
     METHOD_BOOT_REBOOT_TO_FIRMWARE, METHOD_BOOT_REMOVE_ENTRY, METHOD_BOOT_SET_NEXT,
     METHOD_BOOT_SNAPSHOT, METHOD_CAPABILITIES, METHOD_DAEMON_INFO, METHOD_DAEMON_SHUTDOWN,
     METHOD_DISKS_LIST, METHOD_ECHO, METHOD_EFI_ENTRIES, METHOD_SYSTEM_INFO, METHOD_SYSTEM_POWEROFF,
     METHOD_SYSTEM_REBOOT, PROTOCOL_VERSION,
 };
-use yua_core::power;
+use sysforge_core::power;
 
 use crate::server::Peer;
 use crate::{Config, DaemonMode, VERSION};
@@ -33,11 +33,11 @@ pub fn dispatch(req: &Request, cfg: &Config, peer: &Peer) -> Response {
 
 /// Confirmação explícita OBRIGATÓRIA em todo método de efeito real.
 /// Nada de "confirm" implícito — a UI sempre manda a decisão do usuário.
-fn require_confirm(req: &Request) -> Result<(), YuaError> {
+fn require_confirm(req: &Request) -> Result<(), SysforgeError> {
     if req.params.get("confirm").and_then(|c| c.as_bool()) == Some(true) {
         Ok(())
     } else {
-        Err(YuaError::new(
+        Err(SysforgeError::new(
             ErrorDomain::Auth,
             6,
             "Confirmação explícita ausente — operação NÃO executada",
@@ -46,13 +46,13 @@ fn require_confirm(req: &Request) -> Result<(), YuaError> {
     }
 }
 
-fn require_str(req: &Request, key: &str) -> Result<String, YuaError> {
+fn require_str(req: &Request, key: &str) -> Result<String, SysforgeError> {
     req.params
         .get(key)
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .ok_or_else(|| {
-            YuaError::new(
+            SysforgeError::new(
                 ErrorDomain::Io,
                 12,
                 format!("Parâmetro obrigatório ausente: {key}"),
@@ -60,12 +60,12 @@ fn require_str(req: &Request, key: &str) -> Result<String, YuaError> {
         })
 }
 
-fn handle(req: &Request, cfg: &Config, _peer: &Peer) -> Result<serde_json::Value, YuaError> {
+fn handle(req: &Request, cfg: &Config, _peer: &Peer) -> Result<serde_json::Value, SysforgeError> {
     let exec = Executor::default();
     match req.method.as_str() {
         // ---------- read-only ----------
         METHOD_ECHO => Ok(json!({ "echo": req.params.get("message").cloned().unwrap_or(json!("pong")) })),
-        METHOD_SYSTEM_INFO => serde_json::to_value(probe_system_info()).map_err(YuaError::from),
+        METHOD_SYSTEM_INFO => serde_json::to_value(probe_system_info()).map_err(SysforgeError::from),
         METHOD_DISKS_LIST => {
             let mut devs = list_blockdevices(&exec)?;
             for d in devs.iter_mut() {
@@ -74,12 +74,12 @@ fn handle(req: &Request, cfg: &Config, _peer: &Peer) -> Result<serde_json::Value
                     enrich_from_udev(p);
                 }
             }
-            serde_json::to_value(devs).map_err(YuaError::from)
+            serde_json::to_value(devs).map_err(SysforgeError::from)
         }
-        METHOD_EFI_ENTRIES => serde_json::to_value(read_efi_state(&exec)?).map_err(YuaError::from),
-        METHOD_CAPABILITIES => serde_json::to_value(probe_capabilities()).map_err(YuaError::from),
+        METHOD_EFI_ENTRIES => serde_json::to_value(read_efi_state(&exec)?).map_err(SysforgeError::from),
+        METHOD_CAPABILITIES => serde_json::to_value(probe_capabilities()).map_err(SysforgeError::from),
         METHOD_DAEMON_INFO => Ok(json!({
-            "daemon": "yua-osd",
+            "daemon": "sysforge-osd",
             "version": VERSION,
             "protocol": PROTOCOL_VERSION,
             "mode": cfg.mode.label(),
@@ -102,15 +102,15 @@ fn handle(req: &Request, cfg: &Config, _peer: &Peer) -> Result<serde_json::Value
             // Validações ANTES de tocar no firmware:
             let state = read_efi_state(&exec)?;
             let Some(entry) = state.entry(&entry_id) else {
-                return Err(YuaError::new(
+                return Err(SysforgeError::new(
                     ErrorDomain::Boot,
                     3,
                     format!("Entrada de boot {entry_id} não existe"),
                 )
-                .with_recommendation("Rode `yua boot` para ver os IDs válidos."));
+                .with_recommendation("Rode `sysforge boot` para ver os IDs válidos."));
             };
             if !entry.active {
-                return Err(YuaError::new(
+                return Err(SysforgeError::new(
                     ErrorDomain::Boot,
                     4,
                     format!("Entrada {entry_id} ({}) está INATIVA no firmware", entry.name),
@@ -128,7 +128,7 @@ fn handle(req: &Request, cfg: &Config, _peer: &Peer) -> Result<serde_json::Value
                 .timeout(std::time::Duration::from_secs(20));
             let r = exec.run_low_risk(spec)?;
             if !r.success() {
-                return Err(YuaError::command_failed("efibootmgr --bootnext", &[], r.exit_code, &r.stderr));
+                return Err(SysforgeError::command_failed("efibootmgr --bootnext", &[], r.exit_code, &r.stderr));
             }
             let now = read_efi_state(&exec)?;
             Ok(json!({
@@ -154,7 +154,7 @@ fn handle(req: &Request, cfg: &Config, _peer: &Peer) -> Result<serde_json::Value
                 .timeout(std::time::Duration::from_secs(20));
             let r = exec.run_low_risk(spec)?;
             if !r.success() {
-                return Err(YuaError::command_failed("efibootmgr --delete-bootnext", &[], r.exit_code, &r.stderr));
+                return Err(SysforgeError::command_failed("efibootmgr --delete-bootnext", &[], r.exit_code, &r.stderr));
             }
             Ok(json!({ "cleared": true }))
         }
@@ -164,7 +164,7 @@ fn handle(req: &Request, cfg: &Config, _peer: &Peer) -> Result<serde_json::Value
             let entry_id = require_str(req, "entry_id")?;
             let state = read_efi_state(&exec)?;
             let Some(entry) = state.entry(&entry_id) else {
-                return Err(YuaError::new(
+                return Err(SysforgeError::new(
                     ErrorDomain::Boot,
                     3,
                     format!("Entrada de boot {entry_id} não existe"),
@@ -172,7 +172,7 @@ fn handle(req: &Request, cfg: &Config, _peer: &Peer) -> Result<serde_json::Value
             };
             // Guardas: internas do firmware são INTOCÁVEIS.
             if entry.is_firmware_internal() {
-                return Err(YuaError::new(
+                return Err(SysforgeError::new(
                     ErrorDomain::Boot,
                     5,
                     format!("Entrada {} é INTERNA do firmware — recusado", entry.name),
@@ -180,7 +180,7 @@ fn handle(req: &Request, cfg: &Config, _peer: &Peer) -> Result<serde_json::Value
                 .with_recommendation("Setup/Diagnostics/menus são gerados pelo próprio firmware; removê-las pode quebrar o boot."));
             }
             if !entry.is_removable_by_os() {
-                return Err(YuaError::new(
+                return Err(SysforgeError::new(
                     ErrorDomain::Boot,
                     5,
                     format!("Entrada {} não é uma entrada de disco removível pelo SO", entry.name),
@@ -194,7 +194,7 @@ fn handle(req: &Request, cfg: &Config, _peer: &Peer) -> Result<serde_json::Value
                 .timeout(std::time::Duration::from_secs(20));
             let r = exec.run_low_risk(spec)?;
             if !r.success() {
-                return Err(YuaError::command_failed("efibootmgr -B", &[], r.exit_code, &r.stderr));
+                return Err(SysforgeError::command_failed("efibootmgr -B", &[], r.exit_code, &r.stderr));
             }
             Ok(json!({
                 "removed": entry_id,
@@ -244,7 +244,7 @@ fn handle(req: &Request, cfg: &Config, _peer: &Peer) -> Result<serde_json::Value
         }
 
         other => {
-            let e = YuaError::new(
+            let e = SysforgeError::new(
                 ErrorDomain::NotSupported,
                 1,
                 format!("Método desconhecido: {other}"),

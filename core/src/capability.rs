@@ -1,5 +1,5 @@
 //! Probe de capacidades do ambiente: ferramentas externas, KVM, OVMF,
-//! headers de build do Tauri. O doctor (`yua doctor`) consome isto para
+//! headers de build do Tauri. O doctor (`sysforge doctor`) consome isto para
 //! dizer com precisão o que está pronto e o que falta instalar — sem
 //! adivinhação.
 
@@ -20,7 +20,7 @@ pub struct ToolSpec {
     pub apt_package: &'static str,
 }
 
-/// Registro completo de ferramentas usadas pelo YUA.
+/// Registro completo de ferramentas usadas pelo SYSFORGE.
 /// Grupos: core (essencial), auth, health, windows, virtual.
 pub const TOOL_SPECS: &[ToolSpec] = &[
     // ---- essenciais (presentes no Mint 22.3 por padrão) ----
@@ -152,7 +152,7 @@ pub fn probe_capabilities() -> CapabilityReport {
         Availability::Available
     } else {
         Availability::unavailable(
-            "YUA-DEP-001",
+            "SF-DEP-001",
             "/dev/kvm ausente — testes em VM ficarão lentos (emulação) ou indisponíveis",
         )
     };
@@ -162,7 +162,7 @@ pub fn probe_capabilities() -> CapabilityReport {
         .find(|p| std::path::Path::new(p).exists())
         .map(|_| Availability::Available)
         .unwrap_or_else(|| {
-            Availability::unavailable("YUA-DEP-002", "firmware UEFI OVMF não encontrado (pacote ovmf)")
+            Availability::unavailable("SF-DEP-002", "firmware UEFI OVMF não encontrado (pacote ovmf)")
         });
 
     let memtest86 = ["/boot/memtest86+x64.efi", "/boot/efi/memtest86+/memtest86+x64.efi"]
@@ -170,7 +170,7 @@ pub fn probe_capabilities() -> CapabilityReport {
         .find(|p| std::path::Path::new(p).exists())
         .map(|_| Availability::Available)
         .unwrap_or_else(|| {
-            Availability::unavailable("YUA-DEP-003", "memtest86+ não instalado (pacote memtest86+)")
+            Availability::unavailable("SF-DEP-003", "memtest86+ não instalado (pacote memtest86+)")
         });
 
     let tauri_build_ready = [

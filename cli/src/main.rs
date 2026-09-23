@@ -1,4 +1,4 @@
-//! `yua` — CLI de terminal do YUA OS MANAGER.
+//! `sysforge` — CLI de terminal do SYSFORGE.
 //!
 //! Executável SEPARADO do app desktop (requisito do projeto), com efeitos
 //! visuais: banner em gradiente ANSI, spinner braille, tabelas box-drawing,
@@ -11,14 +11,14 @@ use std::io::IsTerminal;
 
 use clap::{Parser, Subcommand};
 
-use yua_core::error::YuaError;
-use yua_core::logging;
+use sysforge_core::error::SysforgeError;
+use sysforge_core::logging;
 
 #[derive(Parser)]
 #[command(
-    name = "yua",
+    name = "sysforge",
     version,
-    about = "YUA OS MANAGER — deployment & recovery universal · CLI de terminal",
+    about = "SYSFORGE — deployment & recovery universal · CLI de terminal",
     disable_help_subcommand = true
 )]
 struct Cli {
@@ -45,7 +45,7 @@ enum Commands {
     },
     /// Diagnóstico completo do ambiente com instruções exatas de correção
     Doctor,
-    /// Controle do daemon yua-osd (IPC privilegiado)
+    /// Controle do daemon sysforge-osd (IPC privilegiado)
     Daemon {
         #[command(subcommand)]
         action: Option<DaemonAction>,
@@ -61,8 +61,12 @@ enum Commands {
         #[arg(long)]
         confirm: bool,
     },
-    /// Fluxo real de instalação do Windows 11 (checklist → USB → BootNext)
-    Winstall {
+    /// Instala um sistema operacional (checklist → USB → BootNext).
+    /// Windows 11: suportado hoje. Outros alvos: roadmap honesto.
+    Install {
+        /// Alvo da instalação (padrão: windows11)
+        #[arg(long, default_value = "windows11")]
+        target: String,
         /// Executa as ações (sem isto: apenas diagnóstico)
         #[arg(long)]
         apply: bool,
@@ -79,7 +83,7 @@ enum Commands {
         #[arg(long)]
         reboot: bool,
     },
-    /// Mostra as últimas linhas do log do YUA
+    /// Mostra as últimas linhas do log do SYSFORGE
     Logs {
         /// Quantidade de linhas a exibir
         #[arg(long, default_value_t = 30)]
@@ -141,7 +145,7 @@ fn main() {
     logging::init(logging::default_app_log_file().as_deref(), "info");
 
     let json = cli.json;
-    let result: Result<(), YuaError> = match cli.command {
+    let result: Result<(), SysforgeError> = match cli.command {
         Commands::Status => commands::status::run(json, color),
         Commands::Disks => commands::disks::run(json, color),
         Commands::Boot { action } => commands::boot::run(json, color, action),
@@ -150,16 +154,18 @@ fn main() {
             commands::daemon::run(json, color, action, socket)
         }
         Commands::Power { action, confirm } => commands::power::run(json, color, action, confirm),
-        Commands::Winstall {
+        Commands::Install {
+            target,
             apply,
             iso,
             edition,
             full_wipe,
             reboot,
-        } => commands::winstall::run(
+        } => commands::install::run(
             json,
             color,
-            commands::winstall::WinstallOpts {
+            commands::install::InstallOpts {
+                target,
                 apply,
                 iso,
                 edition,

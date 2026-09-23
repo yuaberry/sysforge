@@ -15,8 +15,8 @@ export default function Placeholder({ title, phase, desc }: { title: string; pha
           nunca mockada.
         </p>
         <ul className="plain-list">
-          <li>Ferramentas e engines correspondentes estão sendo construídas em <code>yua-core</code>.</li>
-          <li>Operações privilegiadas desta fase passarão pelo daemon <code>yua-osd</code> com polkit.</li>
+          <li>Ferramentas e engines correspondentes estão sendo construídas em <code>sysforge-core</code>.</li>
+          <li>Operações privilegiadas desta fase passarão pelo daemon <code>sysforge-osd</code> com polkit.</li>
           <li>Acompanhe o progresso real em <code>IMPLEMENTATION_STATUS.md</code>.</li>
         </ul>
       </Card>

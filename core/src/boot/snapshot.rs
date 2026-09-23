@@ -8,7 +8,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 use crate::boot::efi::{read_efi_state, EfiBootState};
-use crate::error::YuaError;
+use crate::error::SysforgeError;
 use crate::executor::{CommandSpec, Executor};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,7 +22,7 @@ pub struct BootSnapshot {
 
 impl BootSnapshot {
     /// Captura o estado ATUAL (read-only — funciona até em modo dev).
-    pub fn capture(executor: &Executor) -> Result<Self, YuaError> {
+    pub fn capture(executor: &Executor) -> Result<Self, SysforgeError> {
         let state = read_efi_state(executor)?;
         let spec = CommandSpec::new("efibootmgr").arg("-v").timeout(std::time::Duration::from_secs(15));
         let raw = executor.run_readonly(spec)?;
@@ -35,7 +35,7 @@ impl BootSnapshot {
 
     /// Persiste o snapshot com escrita atômica; devolve o caminho gravado.
     /// Dev mode → estado do usuário; system mode → /var/lib.
-    pub fn save(&self) -> Result<PathBuf, YuaError> {
+    pub fn save(&self) -> Result<PathBuf, SysforgeError> {
         let dir = snapshots_dir()?;
         fs::create_dir_all(&dir)?;
         let ts = Utc::now().format("%Y%m%d-%H%M%S");
@@ -50,14 +50,14 @@ impl BootSnapshot {
     }
 }
 
-fn snapshots_dir() -> Result<PathBuf, YuaError> {
+fn snapshots_dir() -> Result<PathBuf, SysforgeError> {
     if unsafe { libc::getuid() } == 0 {
-        Ok(PathBuf::from("/var/lib/yua-os-manager/snapshots"))
+        Ok(PathBuf::from("/var/lib/sysforge/snapshots"))
     } else {
         let home = std::env::var_os("HOME")
             .map(PathBuf::from)
-            .ok_or_else(|| YuaError::new(crate::error::ErrorDomain::Io, 2, "HOME não definido"))?;
-        Ok(home.join(".local/share/yua-os-manager/snapshots"))
+            .ok_or_else(|| SysforgeError::new(crate::error::ErrorDomain::Io, 2, "HOME não definido"))?;
+        Ok(home.join(".local/share/sysforge/snapshots"))
     }
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Card, ErrorCard, Skeleton, KV, Badge, useBackend } from './Dashboard';
-import { fmtBytes, backend, toBackendError } from '../lib/yua';
+import { fmtBytes, backend, toBackendError } from '../lib/sysforge';
 import ControlPanel from '../components/ControlPanel';
 import type { BackendError, WindowsChecklist as Checklist, RemovableMedia } from '../types';
 
@@ -66,11 +66,25 @@ export default function WindowsPage() {
   return (
     <div className="page">
       <header className="page-head">
-        <h1>Instalar Windows 11</h1>
+        <h1>Instalar Sistema Operacional</h1>
         <p className="page-sub">
           Fluxo real: preparar mídia → armazenar respostas (autounattend) → BootNext → reiniciar.
-          Após o reboot, o instalador do Windows assume com tudo pronto.
+          Após o reboot, o instalador do sistema assume com tudo pronto.
         </p>
+        <div className="target-cards">
+          <div className="target-card active">
+            <strong>Windows 11</strong>
+            <span>Pronto agora — checklist real, autounattend com bypass de hardware antigo (TPM/CPU), BootNext one-shot.</span>
+          </div>
+          <div className="target-card soon">
+            <strong>Ubuntu / Linux Mint</strong>
+            <span>Em breve — a engenharia de mídia/checklist já é agnóstica; falta o autoboot por distro.</span>
+          </div>
+          <div className="target-card soon">
+            <strong>Outros sistemas</strong>
+            <span>Em breve — Ventoy aceita qualquer ISO: use a cópia manual hoje, o fluxo guiado vem aí.</span>
+          </div>
+        </div>
       </header>
 
       {checklist.state === 'loading' && <Skeleton />}
@@ -112,7 +126,7 @@ export default function WindowsPage() {
           <div className="grid">
             <Card title="Mídia USB detectada" tag="lsblk rm:1">
               {media.length === 0 ? (
-                <p className="dim">Nenhum pendrive conectado. Conecte um (≥ 8 GiB, Ventoy recomendado) e o YUA faz o resto.</p>
+                <p className="dim">Nenhum pendrive conectado. Conecte um (≥ 8 GiB, Ventoy recomendado) e o SYSFORGE faz o resto.</p>
               ) : (
                 media.map((m) => (
                   <KV

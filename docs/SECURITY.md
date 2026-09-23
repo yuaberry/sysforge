@@ -1,4 +1,4 @@
-# Segurança — YUA OS MANAGER
+# Segurança — SYSFORGE
 
 ## Modelo de ameaças
 
@@ -16,35 +16,35 @@ Uma ferramenta que particiona discos e manipula boot pode destruir dados. As ame
 
 | # | Barreira | Onde | Código |
 |---|---|---|---|
-| 1 | Identidade do disco (model+serial+size) revalidada milissegundos antes de qualquer destrutivo | `executor.rs` | `YUA-DISK-009` |
-| 2 | Host-disk guard: disco do rootfs vivo NUNCA recebe destrutivo | `executor.rs` | `YUA-DISK-010` |
-| 3 | Destrutivo exige `operation_id` persistido antes | `executor.rs` | `YUA-STATE-001` |
+| 1 | Identidade do disco (model+serial+size) revalidada milissegundos antes de qualquer destrutivo | `executor.rs` | `SF-DISK-009` |
+| 2 | Host-disk guard: disco do rootfs vivo NUNCA recebe destrutivo | `executor.rs` | `SF-DISK-010` |
+| 3 | Destrutivo exige `operation_id` persistido antes | `executor.rs` | `SF-STATE-001` |
 | 4 | Sem shell: `Command::new(program).args([...])` sempre | `executor.rs` | — |
 | 5 | Timeout e locale determinístico (`LC_ALL=C`) em todo comando | `executor.rs` | — |
-| 6 | Fail-closed do daemon: destrutivo futuro recusado em TODOS os modos | `daemon/auth.rs` | `YUA-AUTH-002` / `YUA-AUTH-004` |
+| 6 | Fail-closed do daemon: destrutivo futuro recusado em TODOS os modos | `daemon/auth.rs` | `SF-AUTH-002` / `SF-AUTH-004` |
 | 7 | Identidade real do chamador via `SO_PEERCRED` (kernel) | `daemon/server.rs` | — |
-| 8 | Métodos privilegiados (boot/energia) exigem modo SYSTEM + **pkcheck polkit** com o pid+starttime do chamador — senha pedida ao usuário na tela | `daemon/auth.rs` | `YUA-AUTH-005` |
-| 9 | Confirmação explícita (`confirm:true`) obrigatória em todo método de efeito real | `daemon/handlers.rs` | `YUA-AUTH-006` |
+| 8 | Métodos privilegiados (boot/energia) exigem modo SYSTEM + **pkcheck polkit** com o pid+starttime do chamador — senha pedida ao usuário na tela | `daemon/auth.rs` | `SF-AUTH-005` |
+| 9 | Confirmação explícita (`confirm:true`) obrigatória em todo método de efeito real | `daemon/handlers.rs` | `SF-AUTH-006` |
 | 10 | Snapshot completo do UEFI ANTES de qualquer mutação de boot | `core/boot/snapshot.rs` | arquivo auditável |
-| 11 | Entradas internas do firmware (FvFile/VenMsg) são INTOCÁVEIS na remoção | `daemon/handlers.rs` | `YUA-BOOT-005` |
+| 11 | Entradas internas do firmware (FvFile/VenMsg) são INTOCÁVEIS na remoção | `daemon/handlers.rs` | `SF-BOOT-005` |
 | 12 | BootNext é one-shot — BootOrder PERMANENTE nunca é escrito | `daemon/handlers.rs` | — |
 | 13 | Auditoria JSONL de TODA chamada (permitida ou negada) | `daemon/server.rs` | — |
-| 14 | State machine com escrita atômica + checksum SHA-256; adulteração detectada | `state.rs` | `YUA-STATE-003` |
+| 14 | State machine com escrita atômica + checksum SHA-256; adulteração detectada | `state.rs` | `SF-STATE-003` |
 | 15 | Autounattend NUNCA contém senhas; conta é criada no OOBE (decisão consciente do usuário) | `core/windows/unattend.rs` | testado |
-| 16 | Modo full-wipe do autounattend exige confirmação DIGITADA ("APAGAR") no CLI | `cli/winstall.rs` | — |
+| 16 | Modo full-wipe do autounattend exige confirmação DIGITADA ("APAGAR") no CLI | `cli/install.rs` | — |
 
 ## Autorização (Fase 2+)
 
-Actions polkit (deploy/systemd/com.yua.osd.policy):
-- `com.yua.osd.readonly` — allow_active=yes
-- `com.yua.osd.lowrisk` — auth_admin_keep
-- `com.yua.osd.destructive` — auth_admin (sempre pede senha, sempre por evento)
+Actions polkit (deploy/systemd/com.sysforge.osd.policy):
+- `com.sysforge.osd.readonly` — allow_active=yes
+- `com.sysforge.osd.lowrisk` — auth_admin_keep
+- `com.sysforge.osd.destructive` — auth_admin (sempre pede senha, sempre por evento)
 
 A checagem será via `pkcheck --process <pid>,<start_time> --action-id ...` usando o PID obtido por `SO_PEERCRED` — o cliente não declara quem é.
 
 ## Hardening do service (modo system)
 
-`NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes`, `ProtectKernelTunables/Modules`, `ProtectControlGroups`, `RestrictSUIDSGID`. `ReadWritePaths` mínimo (hoje: `/var/lib/yua-os-manager`; a Fase 5 adicionará `/boot/efi com justificativa registrada aqui).
+`NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes`, `ProtectKernelTunables/Modules`, `ProtectControlGroups`, `RestrictSUIDSGID`. `ReadWritePaths` mínimo (hoje: `/var/lib/sysforge`; a Fase 5 adicionará `/boot/efi com justificativa registrada aqui).
 
 ## Política de segredos
 
@@ -54,4 +54,4 @@ A checagem será via `pkcheck --process <pid>,<start_time> --action-id ...` usan
 ## Resposta a incidentes
 
 - Suspeita de adulteração de estado: NÃO retomar; inspecionar `operation.json` (checksum) e `audit.jsonl`; recomeçar a operação do zero.
-- Erros `YUA-DISK-009/010` inesperados: coletar `yua logs`, `lsblk --json -b` e abrir issue com os códigos.
+- Erros `SF-DISK-009/010` inesperados: coletar `sysforge logs`, `lsblk --json -b` e abrir issue com os códigos.

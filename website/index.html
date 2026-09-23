@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Sysforge — troque de sistema operacional sem medo. Assistente que diagnostica, prepara a mídia e reinicia sua máquina direto no instalador.">
+<title>SYSFORGE — Troque de sistema operacional sem medo</title>
+<style>
+:root {
+  --bg: #0a0e14;
+  --bg2: #0d1220;
+  --card: rgba(255,255,255,.035);
+  --border: rgba(255,255,255,.08);
+  --txt: #e6edf3;
+  --dim: #9aa7b8;
+  --cyan: #22d3ee;
+  --violet: #a78bfa;
+  --magenta: #f472b6;
+  --orange: #fb923c;
+  --green: #4ade80;
+  --grad: linear-gradient(100deg, var(--cyan), var(--violet), var(--magenta));
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  background: var(--bg);
+  color: var(--txt);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+  line-height: 1.6;
+}
+::selection { background: var(--violet); color: #fff; }
+
+/* ─── Fundo animado: orbes + grid ─── */
+.orbs { position:fixed; inset:0; z-index:-2; overflow:hidden; }
+.orb { position:absolute; border-radius:50%; filter:blur(90px); opacity:.22; animation: drift 26s ease-in-out infinite alternate; }
+.orb.c1 { width:520px; height:520px; background:var(--cyan); top:-12%; left:-8%; }
+.orb.c2 { width:480px; height:480px; background:var(--violet); top:30%; right:-12%; animation-delay:-8s; }
+.orb.c3 { width:420px; height:420px; background:var(--magenta); bottom:-14%; left:30%; animation-delay:-16s; }
+.orb.c4 { width:300px; height:300px; background:var(--orange); bottom:20%; left:8%; animation-delay:-22s; opacity:.12; }
+@keyframes drift {
+  0%   { transform: translate(0,0) scale(1); }
+  50%  { transform: translate(60px,-40px) scale(1.08); }
+  100% { transform: translate(-40px,50px) scale(.95); }
+}
+.grid-fade {
+  position:fixed; inset:0; z-index:-1; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 40%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 40%, transparent 100%);
+}
+
+/* ─── Faíscas da forja ─── */
+#sparks { position:fixed; inset:0; z-index:-1; pointer-events:none; }
+.spark {
+  position:absolute; bottom:-6px; width:3px; height:3px; border-radius:50%;
+  background:var(--orange);
+  box-shadow: 0 0 8px 1px rgba(251,146,60,.8);
+  animation: rise linear infinite;
+  opacity:0;
+}
+@keyframes rise {
+  0%   { transform: translate(0,0) scale(1); opacity:0; }
+  8%   { opacity:.9; }
+  100% { transform: translate(var(--dx, 20px), -108vh) scale(.2); opacity:0; }
+}
+
+/* ─── Nav ─── */
+nav {
+  position:fixed; top:0; left:0; right:0; z-index:100;
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 14px 6vw;
+  background: rgba(10,14,20,.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+  transition: padding .3s ease;
+}
+nav.shrunk { padding: 9px 6vw; }
+.logo { font-weight:800; font-size:1.25rem; letter-spacing:.14em; text-decoration:none; }
+.logo .mark {
+  background: var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+.logo .anvil { color:var(--orange); }
+.nav-links { display:flex; gap:26px; }
+.nav-links a { color:var(--dim); text-decoration:none; font-size:.92rem; position:relative; transition:color .25s; }
+.nav-links a::after {
+  content:''; position:absolute; left:0; bottom:-4px; width:0; height:2px;
+  background:var(--grad); transition:width .3s ease;
+}
+.nav-links a:hover { color:var(--txt); }
+.nav-links a:hover::after { width:100%; }
+@media (max-width:720px){ .nav-links { display:none; } }
+
+/* ─── Hero ─── */
+.hero {
+  min-height: 100vh;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  text-align:center; padding: 120px 6vw 60px; position:relative;
+}
+.hero-badge {
+  font-size:.78rem; letter-spacing:.22em; text-transform:uppercase;
+  color:var(--cyan); border:1px solid rgba(34,211,238,.35); border-radius:999px;
+  padding:6px 16px; background:rgba(34,211,238,.06);
+  animation: fadeDown .9s ease both;
+}
+.hero h1 {
+  font-size: clamp(3rem, 9vw, 6.2rem);
+  font-weight:900; letter-spacing:.05em; margin: 22px 0 8px;
+  background: var(--grad); background-size:220% 220%;
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation: gradShift 7s ease infinite, fadeUp .9s .15s ease both;
+}
+@keyframes gradShift { 0%,100%{background-position:0% 50%;} 50%{background-position:100% 50%;} }
+.hero .tagline {
+  font-size: clamp(1.05rem, 2.6vw, 1.5rem); color:var(--txt);
+  min-height: 2.2em; font-weight:300;
+  animation: fadeUp .9s .3s ease both;
+}
+.hero .tagline .cursor {
+  display:inline-block; width:2px; height:1.15em; background:var(--cyan);
+  vertical-align:-0.2em; margin-left:2px; animation: blink 1s steps(1) infinite;
+}
+@keyframes blink { 50% { opacity:0; } }
+.hero-sub { max-width:640px; color:var(--dim); margin:18px auto 34px; animation: fadeUp .9s .45s ease both; }
+.cta-row { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; animation: fadeUp .9s .6s ease both; }
+
+.btn {
+  position:relative; display:inline-flex; align-items:center; gap:10px;
+  padding: 15px 30px; border-radius:12px; font-weight:700; font-size:1rem;
+  text-decoration:none; cursor:pointer; border:none;
+  transition: transform .25s ease, box-shadow .25s ease;
+  overflow:hidden;
+}
+.btn-primary {
+  background: var(--grad); background-size:220% 220%;
+  color:#0a0e14; animation: gradShift 6s ease infinite, pulse 2.6s ease infinite;
+}
+.btn-primary:hover { transform: translateY(-3px) scale(1.03); box-shadow: 0 12px 40px rgba(167,139,250,.4); }
+.btn-primary::after {
+  content:''; position:absolute; top:0; left:-80%;
+  width:50%; height:100%;
+  background: linear-gradient(105deg, transparent, rgba(255,255,255,.55), transparent);
+  transform: skewX(-20deg);
+  animation: shine 3.2s ease infinite;
+}
+@keyframes shine { 0%{left:-80%;} 55%,100%{left:130%;} }
+@keyframes pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(244,114,182,.35); }
+  50% { box-shadow: 0 0 0 12px rgba(244,114,182,0); }
+}
+.btn-ghost {
+  background: var(--card); color:var(--txt); border:1px solid var(--border);
+}
+.btn-ghost:hover { transform: translateY(-3px); border-color:var(--violet); box-shadow: 0 10px 30px rgba(0,0,0,.4); }
+
+.os-detected {
+  margin-top:26px; display:inline-flex; align-items:center; gap:10px;
+  font-size:.88rem; color:var(--dim);
+  border:1px solid var(--border); border-radius:999px; padding:8px 18px;
+  background:var(--card);
+  animation: fadeUp .9s .75s ease both;
+}
+.os-detected .dot { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 10px var(--green); animation: blink 2s ease infinite; }
+.os-detected b { color:var(--txt); }
+
+.scroll-hint {
+  position:absolute; bottom:26px; left:50%; transform:translateX(-50%);
+  color:var(--dim); font-size:1.4rem; animation: bounceY 1.8s ease infinite; text-decoration:none;
+}
+@keyframes bounceY { 0%,100%{transform:translate(-50%,0);} 50%{transform:translate(-50%,10px);} }
+
+@keyframes fadeUp { from{opacity:0; transform:translateY(26px);} to{opacity:1; transform:translateY(0);} }
+@keyframes fadeDown { from{opacity:0; transform:translateY(-20px);} to{opacity:1; transform:translateY(0);} }
+
+/* ─── Seções ─── */
+section { max-width:1080px; margin:0 auto; padding: 90px 6vw 20px; }
+.sec-tag { color:var(--cyan); font-size:.8rem; letter-spacing:.24em; text-transform:uppercase; margin-bottom:10px; }
+.sec-title { font-size: clamp(1.7rem, 4vw, 2.6rem); font-weight:800; margin-bottom:14px; }
+.sec-sub { color:var(--dim); max-width:720px; margin-bottom:44px; }
+
+.reveal { opacity:0; transform:translateY(40px); transition: opacity .8s ease, transform .8s cubic-bezier(.2,.7,.2,1); }
+.reveal.in { opacity:1; transform:translateY(0); }
+.reveal.d1 { transition-delay:.12s; } .reveal.d2 { transition-delay:.24s; } .reveal.d3 { transition-delay:.36s; }
+
+/* ─── Por quê ─── */
+.why-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:18px; }
+.why-card {
+  background:var(--card); border:1px solid var(--border); border-radius:16px;
+  padding:26px; transition: transform .3s ease, border-color .3s ease;
+}
+.why-card:hover { transform:translateY(-6px); border-color:rgba(34,211,238,.4); }
+.why-card .icon { font-size:1.9rem; margin-bottom:12px; }
+.why-card h3 { font-size:1.05rem; margin-bottom:8px; }
+.why-card p { color:var(--dim); font-size:.92rem; }
+.mission {
+  margin-top:34px; padding:28px 32px; border-radius:16px;
+  border:1px solid rgba(251,146,60,.3); background:rgba(251,146,60,.05);
+  font-size:1.02rem;
+}
+.mission b { color:var(--orange); }
+
+/* ─── Público ─── */
+.aud-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:18px; }
+.aud-card {
+  background:var(--card); border:1px solid var(--border); border-radius:16px;
+  padding:28px; position:relative; overflow:hidden;
+  transition:transform .3s ease, box-shadow .3s ease;
+}
+.aud-card:hover { transform:translateY(-6px) rotate(-.4deg); box-shadow:0 18px 44px rgba(0,0,0,.45); }
+.aud-card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--grad);
+  transform:scaleX(0); transform-origin:left; transition:transform .5s ease;
+}
+.aud-card:hover::before { transform:scaleX(1); }
+.aud-card .icon { font-size:2.1rem; margin-bottom:14px; display:inline-block; animation: float 4s ease-in-out infinite; }
+.aud-card:nth-child(2) .icon { animation-delay:-1.3s; }
+.aud-card:nth-child(3) .icon { animation-delay:-2.6s; }
+@keyframes float { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-8px);} }
+.aud-card h3 { margin-bottom:8px; font-size:1.08rem; }
+.aud-card p { color:var(--dim); font-size:.92rem; }
+
+/* ─── Como funciona ─── */
+.steps { display:flex; flex-direction:column; gap:0; position:relative; }
+.step {
+  display:grid; grid-template-columns:64px 1fr; gap:22px;
+  padding:22px 0; position:relative; align-items:start;
+}
+.step .num {
+  width:56px; height:56px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:900; font-size:1.2rem;
+  background:var(--bg2); border:2px solid rgba(167,139,250,.45);
+  color:var(--violet);
+  transition: background .35s ease, color .35s ease, border-color .35s ease, transform .35s ease;
+}
+.step:hover .num {
+  background:var(--grad); color:#0a0e14; border-color:transparent;
+  transform:scale(1.12) rotate(6deg);
+}
+.step h3 { font-size:1.05rem; margin-bottom:6px; }
+.step p { color:var(--dim); font-size:.92rem; max-width:640px; }
+.step::before {
+  content:''; position:absolute; left:28px; top:78px; bottom:-22px; width:2px;
+  background:linear-gradient(rgba(167,139,250,.5), rgba(167,139,250,.05));
+}
+.step:last-child::before { display:none; }
+
+/* ─── Segurança ─── */
+.sec-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px; }
+.sec-card {
+  border:1px solid var(--border); border-radius:14px; padding:22px;
+  background:linear-gradient(160deg, rgba(74,222,128,.05), var(--card) 60%);
+  transition:transform .3s ease;
+}
+.sec-card:hover { transform:translateY(-5px); }
+.sec-card .tag { font-size:.72rem; letter-spacing:.16em; color:var(--green); text-transform:uppercase; font-weight:700; }
+.sec-card h3 { font-size:.98rem; margin:8px 0 6px; }
+.sec-card p { font-size:.86rem; color:var(--dim); }
+
+/* ─── Download ─── */
+#download {
+  text-align:center;
+}
+.dl-box {
+  border:1px solid var(--border); border-radius:24px; padding:54px 30px;
+  background:
+    radial-gradient(ellipse 60% 80% at 50% -20%, rgba(167,139,250,.16), transparent),
+    var(--card);
+  position:relative; overflow:hidden;
+}
+.dl-box .big {
+  font-size: clamp(1.6rem, 4vw, 2.4rem); font-weight:800; margin-bottom:10px;
+}
+.dl-box .hint { color:var(--dim); margin-bottom:32px; }
+.dl-commands {
+  margin:30px auto 0; max-width:520px; text-align:left;
+  background:#070a10; border:1px solid var(--border); border-radius:12px;
+  padding:18px 20px; font-family:'Cascadia Code', ui-monospace, monospace;
+  font-size:.84rem; color:#a5d6ff; position:relative;
+}
+.dl-commands .cmt { color:#5b6b7f; }
+.copy-btn {
+  position:absolute; top:10px; right:10px; background:var(--card); color:var(--dim);
+  border:1px solid var(--border); border-radius:8px; padding:5px 12px; font-size:.72rem;
+  cursor:pointer; transition:all .25s ease;
+}
+.copy-btn:hover { color:var(--txt); border-color:var(--cyan); }
+.copy-btn.ok { color:var(--green); border-color:var(--green); }
+.dl-meta { margin-top:22px; font-size:.8rem; color:var(--dim); }
+.dl-meta a { color:var(--violet); text-decoration:none; }
+.dl-meta a:hover { text-decoration:underline; }
+
+/* ─── Footer ─── */
+footer {
+  margin-top:100px; border-top:1px solid var(--border);
+  padding:40px 6vw; display:flex; flex-wrap:wrap; gap:18px;
+  justify-content:space-between; align-items:center; color:var(--dim); font-size:.86rem;
+}
+footer a { color:var(--cyan); text-decoration:none; }
+footer a:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+
+<div class="orbs" aria-hidden="true">
+  <div class="orb c1"></div><div class="orb c2"></div><div class="orb c3"></div><div class="orb c4"></div>
+</div>
+<div class="grid-fade" aria-hidden="true"></div>
+<div id="sparks" aria-hidden="true"></div>
+
+<nav id="nav">
+  <a class="logo" href="#top"><span class="mark">SYS</span>FORGE <span class="anvil">⚒</span></a>
+  <div class="nav-links">
+    <a href="#porque">Por quê</a>
+    <a href="#publico">Para quem</a>
+    <a href="#como">Como funciona</a>
+    <a href="#seguranca">Segurança</a>
+    <a href="#download">Download</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <span class="hero-badge">open source · mit · feito em rust + tauri</span>
+  <h1>SYSFORGE</h1>
+  <p class="tagline"><span id="typed"></span><span class="cursor"></span></p>
+  <p class="hero-sub">
+    Assistente desktop que <b>diagnostica sua máquina</b>, prepara o pendrive, guarda as respostas
+    da instalação e <b>reinicia direto no instalador do sistema</b> — com autorização auditada a cada passo.
+  </p>
+  <div class="cta-row">
+    <a class="btn btn-primary" id="btn-download" href="#download">⬇ Baixar o Sysforge</a>
+    <a class="btn btn-ghost" href="https://github.com/yuaberry/sysforge" target="_blank" rel="noopener">⭐ Ver no GitHub</a>
+  </div>
+  <div class="os-detected" id="os-badge"><span class="dot"></span> detectando seu sistema…</div>
+  <a class="scroll-hint" href="#porque" aria-label="rolar">↓</a>
+</header>
+
+<section id="porque">
+  <p class="sec-tag reveal">a motivação</p>
+  <h2 class="sec-title reveal">Por que o Sysforge existe</h2>
+  <p class="sec-sub reveal d1">
+    Trocar de sistema operacional sempre foi um rito de passagem cheio de armadilhas:
+    tutorial de 40 abas, BIOS em inglês, medo de apagar tudo, e — no caso do Windows 11 —
+    <b>hardware perfeitamente bom rejeitado por regras arbitrárias</b>.
+  </p>
+  <div class="why-grid">
+    <div class="why-card reveal">
+      <div class="icon">🚫</div>
+      <h3>Computador antigo, bloqueio artificial</h3>
+      <p>O Windows 11 exige TPM 2.0 e CPU "suportada" — um i7 de 2014 rodava tudo, mas é oficialmente rejeitado. O Sysforge detecta isso e inclui o bypass de hardware (LabConfig) no autounattend — e te conta a verdade antes de você decidir.</p>
+    </div>
+    <div class="why-card reveal d1">
+      <div class="icon">😰</div>
+      <h3>Instalar SO dá medo — e o medo é justo</h3>
+      <p>Um clique errado na tela de partições apaga anos de arquivos. O Sysforge nunca esconde o que vai acontecer: checklist honesto, confirmação digitada para ações irreversíveis e snapshot do boot UEFI antes de qualquer mutação.</p>
+    </div>
+    <div class="why-card reveal d2">
+      <div class="icon">🧭</div>
+      <h3>A BIOS não precisa ser um enigma</h3>
+      <p>Reiniciar direto na tela do setup, apontar o próximo boot para o pendrive e voltar tudo ao normal depois — sem caçar a tecla F2/F12/Del do seu modelo. O Sysforge faz isso pela API UEFI, com uma tentativa e reversão.</p>
+    </div>
+  </div>
+  <div class="mission reveal d3">
+    <b>Missão:</b> fazer com que qualquer pessoa — sem saber o que é TPM, Secure Boot ou efibootmgr —
+    consiga trocar de sistema com <b>informação honesta</b>, <b>passos guiados</b> e
+    <b>segurança auditável</b>. E para quem já sabe: ferramenta com guardas de verdade, não telas de make-believe.
+  </div>
+</section>
+
+<section id="publico">
+  <p class="sec-tag reveal">público-alvo</p>
+  <h2 class="sec-title reveal">Para quem é</h2>
+  <p class="sec-sub reveal d1">Três públicos, um mesmo assistente:</p>
+  <div class="aud-grid">
+    <div class="aud-card reveal">
+      <div class="icon">🌱</div>
+      <h3>Quem nunca instalou um SO</h3>
+      <p>Checklist em português mostrando exatamente o que falta: ISO, pendrive, BIOS, requisitos. Cada item com o porquê e o comando pronto. Você acompanha o progresso real — sem "confia em mim".</p>
+    </div>
+    <div class="aud-card reveal d1">
+      <div class="icon">🦕</div>
+      <h3>Quem tem computador antigo</h3>
+      <p>TPM ausente, CPU fora da lista? O Sysforge examina o hardware de verdade (i7-4510U testado em campo), explica o bypass e deixa você escolher — assumindo com clareza o que isso significa.</p>
+    </div>
+    <div class="aud-card reveal d2">
+      <div class="icon">🛡️</div>
+      <h3>Quem sabe, mas exige segurança</h3>
+      <p>Fail-closed por construção: toda ação privilegiada passa por polkit com auditoria JSONL, destrutivos são recusados até existirem validados em QEMU, e o BootOrder original nunca é reescrito — só BootNext one-shot.</p>
+    </div>
+  </div>
+</section>
+
+<section id="como">
+  <p class="sec-tag reveal">o fluxo real</p>
+  <h2 class="sec-title reveal">Como funciona</h2>
+  <p class="sec-sub reveal d1">Cinco etapas — do diagnóstico ao instalador assumindo o comando:</p>
+  <div class="steps">
+    <div class="step reveal">
+      <div class="num">1</div>
+      <div><h3>Diagnóstico honesto</h3><p>9 sondagens reais na sua máquina: modo UEFI, Secure Boot, partição ESP, CPU/TPM, mídia USB, ISO e dependências. Nada inventado — o que não dá pra ler, é marcado como indisponível.</p></div>
+    </div>
+    <div class="step reveal d1">
+      <div class="num">2</div>
+      <div><h3>Preparo da mídia</h3><p>Detecção do pendrive Ventoy e cópia da ISO com progresso real byte a byte — sem dd às cegas no dispositivo errado.</p></div>
+    </div>
+    <div class="step reveal d2">
+      <div class="num">3</div>
+      <div><h3>Respostas da instalação</h3><p>Geração do autounattend.xml (edição, chave genérica, bypass de hardware) — o instalador do Windows assume sozinho, sem perguntas em inglês no meio do caminho.</p></div>
+    </div>
+    <div class="step reveal d3">
+      <div class="num">4</div>
+      <div><h3>BootNext one-shot</h3><p>Snapshot UEFI completo antes, depois aponta o próximo boot para o pendrive. O BootOrder original permanece intacto — se algo der errado, o boot volta ao normal no reboot seguinte.</p></div>
+    </div>
+    <div class="step reveal d3">
+      <div class="num">5</div>
+      <div><h3>Reiniciar e instalar</h3><p>A máquina desliga e liga direto no instalador, que encontra o pendrive, o autounattend e instala o sistema. Você só assiste.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="seguranca">
+  <p class="sec-tag reveal">confiança auditável</p>
+  <h2 class="sec-title reveal">Segurança que dá pra conferir</h2>
+  <p class="sec-sub reveal d1">O Sysforge lida com o seu disco e o seu boot. Por isso a segurança não é uma promessa — é arquitetura:</p>
+  <div class="sec-grid">
+    <div class="sec-card reveal"><span class="tag">fail-closed</span><h3>Sem daemon, nada roda</h3><p>Toda ação privilegiada exige o daemon autorizado. Em modo desenvolvimento, operações privilegiadas são recusadas por construção.</p></div>
+    <div class="sec-card reveal d1"><span class="tag">polkit por ação</span><h3>Sua senha, toda vez que importa</h3><p>Cada método é autorizado via polkit checando PID + starttime do solicitante. Nada de sudo cedo demais.</p></div>
+    <div class="sec-card reveal d2"><span class="tag">confirm:true</span><h3>Nenhuma mutação por acidente</h3><p>Escrever no boot exige confirmação explícita no protocolo — não existe "operação silenciosa" que altere sua máquina.</p></div>
+    <div class="sec-card reveal d3"><span class="tag">snapshot uEFI</span><h3>Foto do boot antes de tudo</h3><p>Antes de qualquer mutação no boot: snapshot completo (efibootmgr -v) salvo em disco, com estado para restauração manual.</p></div>
+    <div class="sec-card reveal d3"><span class="tag">one-shot</span><h3>BootOrder nunca reescrito</h3><p>Só usamos BootNext (consumido no próximo boot). A ordem original do seu firmware permanece intocada sempre.</p></div>
+    <div class="sec-card reveal d3"><span class="tag">destrutivo = recusado</span><h3>Wipe/format fora do alcance</h3><p>Operações irreversíveis são recusadas em todos os modos até existirem validadas em máquina virtual com plano e rollback.</p></div>
+  </div>
+</section>
+
+<section id="download">
+  <p class="sec-tag reveal">download</p>
+  <h2 class="sec-title reveal">Leve o Sysforge pra sua máquina</h2>
+  <p class="sec-sub reveal d1" style="margin-inline:auto; text-align:center;">
+    Um pacote <code>.deb</code> instala tudo: app, CLI, daemon, policy de autorização e integração systemd.
+  </p>
+  <div class="dl-box reveal d2">
+    <div class="big" id="dl-big">Pronto para Linux 🐧</div>
+    <div class="hint" id="dl-hint">Clique e o pacote certo começa a baixar agora.</div>
+    <div class="cta-row">
+      <a class="btn btn-primary" id="btn-dl-auto" href="https://github.com/yuaberry/sysforge/releases/latest/download/sysforge_amd64.deb">⬇ Download automático (.deb)</a>
+      <a class="btn btn-ghost" href="https://github.com/yuaberry/sysforge/releases" target="_blank" rel="noopener">📦 Todas as releases</a>
+    </div>
+    <div class="dl-commands">
+      <button class="copy-btn" id="copy-cmd" title="copiar">copiar</button>
+      <span class="cmt"># 1. baixe o .deb acima e instale (Ubuntu 20.04+ / Mint 20+):</span><br>
+      sudo apt install ./sysforge_amd64.deb<br><br>
+      <span class="cmt"># 2. valide seu ambiente:</span><br>
+      sysforge doctor<br>
+      sysforge daemon status
+    </div>
+    <p class="dl-meta">
+      Código-fonte e releases no <a href="https://github.com/yuaberry/sysforge" target="_blank" rel="noopener">GitHub</a> ·
+      v1.1.0 · 3,2 MB · x86_64 · MIT
+    </p>
+  </div>
+</section>
+
+<footer>
+  <div>⚒ <b style="color:var(--txt)">SYSFORGE</b> — forjado para trocar de sistema sem medo.</div>
+  <div><a href="https://github.com/yuaberry/sysforge" target="_blank" rel="noopener">GitHub</a> · MIT · feito por Yua Devs</div>
+</footer>
+
+<script>
+/* ─── Máquina de escrever ─── */
+const phrases = [
+  'Troque de sistema operacional sem medo.',
+  'Do diagnóstico ao instalador, em um clique.',
+  'Feito também para computador antigo.',
+  'Segurança auditável — não promessa.',
+];
+const typedEl = document.getElementById('typed');
+let pi = 0, ci = 0, deleting = false;
+function typeLoop() {
+  const p = phrases[pi];
+  typedEl.textContent = p.slice(0, ci);
+  if (!deleting) {
+    if (ci++ === p.length) { deleting = true; return setTimeout(typeLoop, 2200); }
+  } else {
+    if (ci-- === 0) { deleting = false; pi = (pi + 1) % phrases.length; }
+  }
+  setTimeout(typeLoop, deleting ? 26 : 52);
+}
+typeLoop();
+
+/* ─── Faíscas ─── */
+const sparks = document.getElementById('sparks');
+for (let i = 0; i < 26; i++) {
+  const s = document.createElement('div');
+  s.className = 'spark';
+  s.style.left = (Math.random() * 100) + 'vw';
+  s.style.setProperty('--dx', (Math.random() * 120 - 60) + 'px');
+  s.style.animationDuration = (7 + Math.random() * 9) + 's';
+  s.style.animationDelay = (Math.random() * 9) + 's';
+  const size = 2 + Math.random() * 2.5;
+  s.style.width = s.style.height = size + 'px';
+  sparks.appendChild(s);
+}
+
+/* ─── Nav encolhe ao rolar ─── */
+const nav = document.getElementById('nav');
+addEventListener('scroll', () => nav.classList.toggle('shrunk', scrollY > 40), { passive: true });
+
+/* ─── Reveal ao rolar ─── */
+const io = new IntersectionObserver((es) => {
+  es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+}, { threshold: .12 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+/* ─── Detecção de SO + download direcionado ─── */
+const ua = navigator.userAgent;
+let os = 'desconhecido', supported = false;
+if (/Linux/.test(ua) && !/Android/.test(ua)) { os = 'Linux (x86_64)'; supported = true; }
+else if (/X11|Ubuntu/.test(ua)) { os = 'Linux'; supported = true; }
+else if (/Windows/.test(ua)) os = 'Windows';
+else if (/Mac OS X|Macintosh/.test(ua)) os = 'macOS';
+else if (/Android/.test(ua)) os = 'Android';
+
+const badge = document.getElementById('os-badge');
+const dlBig = document.getElementById('dl-big');
+const dlHint = document.getElementById('dl-hint');
+const dlBtn = document.getElementById('btn-dl-auto');
+
+if (supported) {
+  badge.innerHTML = '<span class="dot"></span> sistema detectado: <b>' + os + '</b> — pacote .deb compatível ✓';
+} else if (os === 'Windows' || os === 'macOS' || os === 'Android') {
+  badge.innerHTML = '<span class="dot" style="background:var(--orange);box-shadow:0 0 10px var(--orange)"></span> detectamos <b>' + os + '</b>';
+  dlBig.textContent = 'O Sysforge roda em Linux 🐧';
+  dlHint.textContent = 'Ele PREPARA a instalação de outro sistema a partir do Linux. Baixe o .deb e use dentro de uma distribuição Linux (Ubuntu, Mint, etc.).';
+  dlBtn.textContent = '⬇ Baixar .deb mesmo assim';
+} else {
+  badge.innerHTML = '<span class="dot"></span> sistema não identificado — o pacote é <b>.deb (Linux)</b>';
+}
+
+/* ─── Copiar comandos ─── */
+document.getElementById('copy-cmd').addEventListener('click', function () {
+  const txt = 'sudo apt install ./sysforge_amd64.deb && sysforge doctor && sysforge daemon status';
+  (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => {
+    this.textContent = 'copiado ✓'; this.classList.add('ok');
+    setTimeout(() => { this.textContent = 'copiar'; this.classList.remove('ok'); }, 1800);
+  }).catch(() => {
+    this.textContent = 'selecione e copie'; 
+  });
+});
+</script>
+</body>
+</html>

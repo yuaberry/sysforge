@@ -1,4 +1,4 @@
-//! Protocolo IPC YUA (NDJSON sobre Unix socket) + cliente.
+//! Protocolo IPC SYSFORGE (NDJSON sobre Unix socket) + cliente.
 
 pub mod client;
 pub mod protocol;

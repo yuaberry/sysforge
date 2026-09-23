@@ -556,6 +556,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "sysforge-cli"
+version = "1.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "colored",
+ "serde",
+ "serde_json",
+ "sysforge-core",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "sysforge-core"
+version = "1.1.0"
+dependencies = [
+ "chrono",
+ "libc",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "sysforge-osd"
+version = "1.1.0"
+dependencies = [
+ "chrono",
+ "libc",
+ "serde",
+ "serde_json",
+ "sysforge-core",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "thiserror"
 version = "2.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -909,48 +951,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "yua-cli"
-version = "1.0.1"
-dependencies = [
- "chrono",
- "clap",
- "colored",
- "serde",
- "serde_json",
- "tracing",
- "tracing-subscriber",
- "yua-core",
-]
-
-[[package]]
-name = "yua-core"
-version = "1.0.1"
-dependencies = [
- "chrono",
- "libc",
- "serde",
- "serde_json",
- "sha2",
- "thiserror",
- "toml",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "yua-osd"
-version = "1.0.1"
-dependencies = [
- "chrono",
- "libc",
- "serde",
- "serde_json",
- "tracing",
- "tracing-subscriber",
- "yua-core",
 ]
 
 [[package]]

@@ -5,7 +5,7 @@ use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::error::{ErrorDomain, YuaError};
+use crate::error::{ErrorDomain, SysforgeError};
 use crate::ipc::protocol::{Request, Response};
 
 #[derive(Debug, Clone, Copy)]
@@ -34,15 +34,15 @@ pub struct YuaClient {
 }
 
 impl YuaClient {
-    pub fn connect(socket: &Path) -> Result<Self, YuaError> {
+    pub fn connect(socket: &Path) -> Result<Self, SysforgeError> {
         let stream = UnixStream::connect(socket).map_err(|e| {
-            YuaError::new(
+            SysforgeError::new(
                 ErrorDomain::Io,
                 5,
-                "Não foi possível conectar ao daemon yua-osd",
+                "Não foi possível conectar ao daemon sysforge-osd",
             )
             .with_technical(format!("socket {}: {e}", socket.display()))
-            .with_recommendation("Verifique se o daemon está ativo (`yua daemon status`).")
+            .with_recommendation("Verifique se o daemon está ativo (`sysforge daemon status`).")
         })?;
         stream
             .set_read_timeout(Some(IpcTimeout::Default.duration()))
@@ -58,12 +58,12 @@ impl YuaClient {
         })
     }
 
-    /// Chama um método e retorna o `result`. Erros viram YuaError com código.
+    /// Chama um método e retorna o `result`. Erros viram SysforgeError com código.
     pub fn call(
         &mut self,
         method: &str,
         params: serde_json::Value,
-    ) -> Result<serde_json::Value, YuaError> {
+    ) -> Result<serde_json::Value, SysforgeError> {
         let id = self.next_id;
         self.next_id += 1;
         let req = Request {
@@ -78,7 +78,7 @@ impl YuaClient {
         let mut buf = String::new();
         let n = self.reader.read_line(&mut buf)?;
         if n == 0 {
-            return Err(YuaError::new(
+            return Err(SysforgeError::new(
                 ErrorDomain::Io,
                 6,
                 "O daemon encerrou a conexão sem responder",
@@ -86,7 +86,7 @@ impl YuaClient {
         }
         let resp: Response = serde_json::from_str(buf.trim())?;
         if resp.id != id {
-            return Err(YuaError::new(
+            return Err(SysforgeError::new(
                 ErrorDomain::Io,
                 7,
                 "Resposta fora de ordem do protocolo",
@@ -95,12 +95,12 @@ impl YuaClient {
         }
         if resp.ok {
             resp.result
-                .ok_or_else(|| YuaError::new(ErrorDomain::Io, 8, "Resposta sem resultado"))
+                .ok_or_else(|| SysforgeError::new(ErrorDomain::Io, 8, "Resposta sem resultado"))
         } else {
             Err(resp
                 .error
-                .map(YuaError::from)
-                .unwrap_or_else(|| YuaError::new(ErrorDomain::Io, 9, "Erro sem detalhes")))
+                .map(SysforgeError::from)
+                .unwrap_or_else(|| SysforgeError::new(ErrorDomain::Io, 9, "Erro sem detalhes")))
         }
     }
 
@@ -111,7 +111,7 @@ impl YuaClient {
         &mut self,
         method: &str,
         params: serde_json::Value,
-    ) -> Result<serde_json::Value, YuaError> {
+    ) -> Result<serde_json::Value, SysforgeError> {
         self.stream
             .set_read_timeout(Some(IpcTimeout::Long.duration()))
             .ok();
@@ -123,7 +123,7 @@ impl YuaClient {
     }
 
     /// Echo de sanidade do protocolo.
-    pub fn ping(&mut self) -> Result<String, YuaError> {
+    pub fn ping(&mut self) -> Result<String, SysforgeError> {
         let v = self.call(
             crate::ipc::protocol::METHOD_ECHO,
             serde_json::json!({"message": "ping"}),

@@ -1,6 +1,6 @@
-//! # yua-core — núcleo do YUA OS MANAGER
+//! # sysforge-core — núcleo do SYSFORGE
 //!
-//! Biblioteca central compartilhada por GUI (Tauri), daemon (`yua-osd`) e CLI (`yua`).
+//! Biblioteca central compartilhada por GUI (Tauri), daemon (`sysforge-osd`) e CLI (`sysforge`).
 //!
 //! Princípios deste crate:
 //! - **Nenhum código de instalação falso**: o que não existe, recusa com código de erro.
@@ -29,7 +29,7 @@ pub const YUA_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub enum Availability {
     Available,
     Unavailable {
-        /// Código YUA-XXX-NNN explicando a indisponibilidade.
+        /// Código SF-XXX-NNN explicando a indisponibilidade.
         reason_code: String,
         /// Motivo técnico legível (ex.: "smartctl requer root").
         reason: String,

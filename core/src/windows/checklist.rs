@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::boot::efi::read_efi_state;
 use crate::capability::probe_capabilities;
-use crate::error::YuaError;
+use crate::error::SysforgeError;
 use crate::executor::Executor;
 use crate::hw::system::probe_system_info;
 use crate::power::firmware_reboot_supported;
@@ -119,7 +119,7 @@ fn item(id: &str, status: ItemStatus, title: &str, detail: String, hint: Option<
 use crate::windows::checklist::ItemStatus::{Fail, Info, Ok as OkS, Warn};
 
 /// Sonda tudo o que importa para o fluxo Windows 11 — de verdade.
-pub fn run_checklist(executor: &Executor) -> Result<WindowsChecklist, YuaError> {
+pub fn run_checklist(executor: &Executor) -> Result<WindowsChecklist, SysforgeError> {
     let sys = probe_system_info();
     let caps = probe_capabilities();
     let isos = find_isos();
@@ -147,7 +147,7 @@ pub fn run_checklist(executor: &Executor) -> Result<WindowsChecklist, YuaError> 
         "Requisitos oficiais do Windows 11",
         hw_note,
         Some(
-            "Hardware antigo é instalável com o bypass LabConfig, que o YUA inclui no autounattend. \
+            "Hardware antigo é instalável com o bypass LabConfig, que o SYSFORGE inclui no autounattend. \
              Você assume a responsabilidade pelo suporte futuro da Microsoft."
             .into(),
         ),
@@ -271,14 +271,14 @@ pub fn run_checklist(executor: &Executor) -> Result<WindowsChecklist, YuaError> 
     // 9 — Daemon system
     let daemon_up = crate::ipc::YuaClient::connect(std::path::Path::new(crate::ipc::DEFAULT_SYSTEM_SOCKET)).is_ok();
     items.push(if daemon_up {
-        item("daemon", OkS, "Daemon yua-osd (system)", "privilégios prontos".into(), None)
+        item("daemon", OkS, "Daemon sysforge-osd (system)", "privilégios prontos".into(), None)
     } else {
         item(
             "daemon",
             Warn,
-            "Daemon yua-osd (system)",
+            "Daemon sysforge-osd (system)",
             "não está rodando — BootNext/reboot precisam dele".into(),
-            Some("Rode `yua daemon system` e autorize no diálogo do polkit (sua senha).".into()),
+            Some("Rode `sysforge daemon system` e autorize no diálogo do polkit (sua senha).".into()),
         )
     });
 
@@ -300,9 +300,9 @@ fn build_recommendation(items: &[ChecklistItem]) -> String {
         return "Corrija os itens vermelhos antes de prosseguir (cada um tem instruções).".into();
     }
     if items.iter().any(|i| i.id == "daemon" && i.status == Warn) {
-        return "Próximo passo: `yua daemon system` (autorize com sua senha no polkit) e rode `yua winstall --apply`.".into();
+        return "Próximo passo: `sysforge daemon system` (autorize com sua senha no polkit) e rode `sysforge install --apply`.".into();
     }
-    "Tudo pronto: rode `yua winstall --apply` para gerar autounattend, armar BootNext e reiniciar.".into()
+    "Tudo pronto: rode `sysforge install --apply` para gerar autounattend, armar BootNext e reiniciar.".into()
 }
 
 #[cfg(test)]

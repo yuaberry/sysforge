@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Card, Badge } from '../pages/Dashboard';
-import { backend, toBackendError, usbEntryId } from '../lib/yua';
+import { backend, toBackendError, usbEntryId } from '../lib/sysforge';
 import type { BackendError, EfiBootState } from '../types';
 
 type ActionState =
@@ -84,7 +84,7 @@ export default function ControlPanel({
               setAction({
                 kind: 'err',
                 error: {
-                  code: 'YUA-BOOT-006',
+                  code: 'SF-BOOT-006',
                   message: 'Nenhuma entrada USB no firmware para auto-detectar — selecione uma entrada na lista.',
                 },
               });

@@ -14,7 +14,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-use crate::error::{ErrorDomain, YuaError};
+use crate::error::{ErrorDomain, SysforgeError};
 use crate::executor::{CommandSpec, Executor, ExecResult};
 
 /// OsIndicationsSupported-8be4df61-... (o firmware anuncia o que aceita).
@@ -28,7 +28,7 @@ pub const EFIVAR_OS_INDICATIONS: &str =
 pub const INDICATION_BOOT_TO_FIRMWARE_UI: u64 = 1;
 
 /// Lê um efivar como u64 LE (formato efivarfs: 4 bytes de atributos + valor).
-fn read_var_u64(path: &str) -> Result<Option<u64>, YuaError> {
+fn read_var_u64(path: &str) -> Result<Option<u64>, SysforgeError> {
     match fs::read(path) {
         Ok(bytes) if bytes.len() >= 12 => {
             let mut buf = [0u8; 8];
@@ -48,7 +48,7 @@ pub fn firmware_reboot_supported() -> bool {
 
 /// Escreve o bit BOOT_TO_FIRMWARE_UI em OsIndications (exige root).
 /// A variável é NÃO-VOLÁTIL: persiste até o firmware consumir no boot.
-pub fn arm_firmware_reboot() -> Result<(), YuaError> {
+pub fn arm_firmware_reboot() -> Result<(), SysforgeError> {
     let payload = {
         // Atributos: NON_VOLATILE(0x01) | BOOTSERVICE_ACCESS(0x02) | RUNTIME_ACCESS(0x04) = 7.
         // Não-volátil é ESSENCIAL: o firmware só vê o pedido no PRÓXIMO boot.
@@ -66,13 +66,13 @@ pub fn arm_firmware_reboot() -> Result<(), YuaError> {
         .truncate(true)
         .open(path)
         .map_err(|e| {
-            YuaError::new(
+            SysforgeError::new(
                 ErrorDomain::Uefi,
                 2,
                 "Não foi possível armar o reboot para o firmware (BIOS)",
             )
             .with_technical(format!("escrever {}: {e}", EFIVAR_OS_INDICATIONS))
-            .with_recommendation("A escrita exige root. Use o daemon em modo sistema (`yua daemon system`) — o polkit pedirá sua senha.")
+            .with_recommendation("A escrita exige root. Use o daemon em modo sistema (`sysforge daemon system`) — o polkit pedirá sua senha.")
         })?;
     f.write_all(&payload)?;
     f.flush()?;
@@ -80,7 +80,7 @@ pub fn arm_firmware_reboot() -> Result<(), YuaError> {
 }
 
 /// Reinicia a máquina AGORA (systemctl reboot). Exige daemon em modo sistema.
-pub fn system_reboot(executor: &Executor) -> Result<ExecResult, YuaError> {
+pub fn system_reboot(executor: &Executor) -> Result<ExecResult, SysforgeError> {
     let spec = CommandSpec::new("systemctl")
         .arg("reboot")
         .timeout(std::time::Duration::from_secs(30));
@@ -88,7 +88,7 @@ pub fn system_reboot(executor: &Executor) -> Result<ExecResult, YuaError> {
 }
 
 /// Desliga a máquina AGORA (systemctl poweroff).
-pub fn system_poweroff(executor: &Executor) -> Result<ExecResult, YuaError> {
+pub fn system_poweroff(executor: &Executor) -> Result<ExecResult, SysforgeError> {
     let spec = CommandSpec::new("systemctl")
         .arg("poweroff")
         .timeout(std::time::Duration::from_secs(30));
@@ -99,9 +99,9 @@ pub fn system_poweroff(executor: &Executor) -> Result<ExecResult, YuaError> {
 /// Caminho primário: `systemctl reboot --firmware-setup` (implementação
 /// systemd, testada em milhões de máquinas). Fallback: escrever OsIndications
 /// na mão + reboot (firmwares sem systemd caminho — não é o caso no Mint).
-pub fn reboot_to_firmware(executor: &Executor) -> Result<(), YuaError> {
+pub fn reboot_to_firmware(executor: &Executor) -> Result<(), SysforgeError> {
     if !firmware_reboot_supported() {
-        return Err(YuaError::new(
+        return Err(SysforgeError::new(
             ErrorDomain::Uefi,
             1,
             "Este firmware não anuncia suporte a reboot-para-setup",
@@ -140,10 +140,10 @@ mod tests {
 
     #[test]
     fn arm_requires_root_and_fails_honestly() {
-        // Sem root (nossa sessão), a escrita DEVE recusar com YUA-UEFI-002 —
+        // Sem root (nossa sessão), a escrita DEVE recusar com SF-UEFI-002 —
         // garantindo que nada "arma BIOS" silenciosamente sem privilégio.
         let err = arm_firmware_reboot().unwrap_err();
-        assert_eq!(err.code, "YUA-UEFI-002");
+        assert_eq!(err.code, "SF-UEFI-002");
         assert!(err.recommendation.contains("daemon"));
     }
 }

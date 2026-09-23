@@ -1,8 +1,8 @@
-# YUA OS MANAGER — Universal Operating System Deployment & Recovery Platform
+# SYSFORGE — Universal Operating System Deployment & Recovery Platform
 #
 # Workspace principal. O app desktop (Tauri) fica EXCLUÍDO até que as
 # dependências de build (libwebkit2gtk-4.1-dev etc.) sejam instaladas via
-# scripts/bootstrap-linux.sh — o doctor (yua doctor) verifica e instrui.
+# scripts/bootstrap-linux.sh — o doctor (sysforge doctor) verifica e instrui.
 #
 # POR QUE exclude: os headers -dev do Tauri não vêm instalados no Mint 22.3
 # por padrão. Mantendo o app fora do workspace default, `cargo build` e
@@ -14,7 +14,7 @@ members = ["core", "daemon", "cli"]
 exclude = ["apps/desktop/src-tauri"]
 
 [workspace.package]
-version = "1.0.1"
+version = "1.1.0"
 edition = "2021"
 license = "MIT"
 authors = ["Yua Devs"]

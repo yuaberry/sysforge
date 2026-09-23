@@ -16,7 +16,7 @@ const NAV_MAIN: NavItem[] = [
   { to: '/', label: 'Dashboard' },
   { to: '/discos', label: 'Discos' },
   { to: '/boot', label: 'Boot / UEFI' },
-  { to: '/windows', label: 'Instalar Windows 11' },
+  { to: '/install', label: 'Instalar Sistema' },
   { to: '/doctor', label: 'Diagnóstico' },
 ];
 
@@ -37,7 +37,7 @@ export default function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark">YUA</span>
+          <span className="brand-mark">SYSFORGE</span>
           <span className="brand-sub">OS MANAGER</span>
         </div>
         <nav>
@@ -69,7 +69,7 @@ export default function App() {
           {NAV_PLANNED.map((item) => (
             <Route key={item.to} path={item.to} element={<Placeholder title={item.label} phase={item.phase} desc={item.desc} />} />
           ))}
-          <Route path="/windows" element={<WindowsPage />} />
+          <Route path="/install" element={<WindowsPage />} />
         </Routes>
       </main>
     </div>

@@ -1,7 +1,7 @@
 //! Saúde de disco via smartctl — COM HONESTIDADE RADICAL:
 //!
-//! - smartctl não instalado → indisponível (YUA-DEP-005) + como instalar.
-//! - instalado mas sem root → indisponível (YUA-DEP-006) + por quê.
+//! - smartctl não instalado → indisponível (SF-DEP-005) + como instalar.
+//! - instalado mas sem root → indisponível (SF-DEP-006) + por quê.
 //! NUNCA inventamos valores de saúde. Sem dado real, o relatório diz isso.
 
 use serde::Serialize;
@@ -33,7 +33,7 @@ pub fn smart_health(executor: &Executor, device: &str) -> SmartReport {
 
     if which("smartctl").is_none() {
         report.available = Availability::unavailable(
-            "YUA-DEP-005",
+            "SF-DEP-005",
             "smartctl (pacote smartmontools) não está instalado neste sistema",
         );
         return report;
@@ -50,7 +50,7 @@ pub fn smart_health(executor: &Executor, device: &str) -> SmartReport {
     let result = match result {
         Ok(r) => r,
         Err(e) => {
-            report.available = Availability::unavailable("YUA-DEP-007", e.message.clone());
+            report.available = Availability::unavailable("SF-DEP-007", e.message.clone());
             return report;
         }
     };
@@ -64,7 +64,7 @@ pub fn smart_health(executor: &Executor, device: &str) -> SmartReport {
             || stderr.contains("root")
         {
             report.available = Availability::unavailable(
-                "YUA-DEP-006",
+                "SF-DEP-006",
                 "smartctl requer root para ler este dispositivo",
             );
             return report;
@@ -99,12 +99,12 @@ pub fn smart_health(executor: &Executor, device: &str) -> SmartReport {
             }
             if report.available.is_available() && report.passed.is_none() && result.stdout.trim().is_empty() {
                 report.available =
-                    Availability::unavailable("YUA-DEP-008", "smartctl não retornou dados legíveis");
+                    Availability::unavailable("SF-DEP-008", "smartctl não retornou dados legíveis");
             }
         }
         Err(e) => {
             report.available = Availability::unavailable(
-                "YUA-DEP-008",
+                "SF-DEP-008",
                 format!("saída do smartctl não pôde ser interpretada: {e}"),
             );
         }
@@ -129,7 +129,7 @@ mod tests {
                 crate::Availability::Unavailable { reason_code, .. } => reason_code.clone(),
                 _ => String::new(),
             },
-            "YUA-DEP-005"
+            "SF-DEP-005"
         );
         assert!(r.passed.is_none() && r.temperature_c.is_none());
     }
