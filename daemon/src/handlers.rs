@@ -154,9 +154,24 @@ fn handle(req: &Request, cfg: &Config, _peer: &Peer) -> Result<serde_json::Value
                 .timeout(std::time::Duration::from_secs(20));
             let r = exec.run_low_risk(spec)?;
             if !r.success() {
-                return Err(SysforgeError::command_failed("efibootmgr --delete-bootnext", &[], r.exit_code, &r.stderr));
+                // Quirk real de campo (efibootmgr 2.39.3): com BootNext=0000 o
+                // --delete-bootnext falha com 17 ("Boot entry 0001 does not
+                // exist") DEIXANDO a variável no firmware. Fallback
+                // determinístico: unlink direto na efivarfs (o kernel deleta a
+                // variável UEFI efetivamente).
+                const BOOTNEXT_VAR: &str =
+                    "/sys/firmware/efi/efivars/BootNext-8be4df61-93ca-11d2-aa0d-00e098032b8c";
+                if std::path::Path::new(BOOTNEXT_VAR).exists() {
+                    std::fs::remove_file(BOOTNEXT_VAR)?;
+                    tracing::warn!(
+                        exit = ?r.exit_code,
+                        "efibootmgr --delete-bootnext falhou; BootNext removido via efivarfs (quirk valor 0000)"
+                    );
+                }
             }
-            Ok(json!({ "cleared": true }))
+            // Verificação de verdade: releitura do estado após a limpeza.
+            let after = BootSnapshot::capture(&exec)?;
+            Ok(json!({ "cleared": after.state.boot_next.is_none() }))
         }
 
         METHOD_BOOT_REMOVE_ENTRY => {
