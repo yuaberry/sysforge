@@ -1,6 +1,6 @@
 [package]
 name = "sysforge-desktop"
-version = "1.1.0"
+version = "1.1.1"
 description = "SYSFORGE — interface desktop (Tauri 2 + React)"
 authors = ["Yua Devs"]
 license = "MIT"
@@ -12,10 +12,10 @@ name = "sysforge_desktop"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.6.3" }
+tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tauri = { version = "2.11.3" }
+tauri = { version = "2.11.3", features = [] }
 sysforge-core = { path = "../../../core" }

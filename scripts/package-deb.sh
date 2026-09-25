@@ -13,7 +13,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
-VER="${1:-1.1.0}"
+VER="${1:-1.1.1}"
 REL="$ROOT/target/release"
 APP_REL="$ROOT/apps/desktop/src-tauri/target/release"
 OUT="$REL/sysforge_amd64.deb"
@@ -23,6 +23,15 @@ for f in "$REL/sysforge" "$REL/sysforge-osd" "$APP_REL/sysforge-desktop" \
          "$ROOT/deploy/desktop/sysforge.desktop"; do
   [ -f "$f" ] || { echo "✖ faltando: $f — compile antes (cargo build --release)"; exit 1; }
 done
+
+# GUARD anti-regressão: binário DEV (modo dev do Tauri) NUNCA pode ser
+# empacotado — ele procura o Vite em localhost:5173 (tela branca na
+# máquina do usuário). Jeito certo: cd apps/desktop && npx tauri build --no-bundle
+if ! strings "$APP_REL/sysforge-desktop" 2>/dev/null | grep 'assets/index-' > /dev/null; then
+  echo "✖ FATAL: frontend NÃO embutido no sysforge-desktop (binário DEV → tela branca)"
+  echo "  Compile com:  cd apps/desktop && npx tauri build --no-bundle"
+  exit 1
+fi
 
 STAGE="$(mktemp -d)"
 D="$STAGE/sysforge_${VER}_amd64"

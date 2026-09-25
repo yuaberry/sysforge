@@ -11,7 +11,7 @@
 #   1. cargo build --workspace --release   (sysforge + sysforge-osd)
 #   2. cargo test --workspace              (validação real)
 #   3. frontend React (npm install + build)
-#   4. app desktop (cargo build em apps/desktop/src-tauri)
+#   4. app desktop de PRODUÇÃO (npx tauri build — embute o frontend;
 #   5. symlinks sysforge/sysforge-osd em ~/.local/bin
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -107,7 +107,8 @@ do_build() {
   ( cd apps/desktop && npm install --no-fund --no-audit && npm run build )
 
   echo "→ 4/5 app desktop (Tauri — primeira compilação demora)…"
-  ( cd apps/desktop/src-tauri && cargo build --release )
+  ( cd apps/desktop && npx tauri build --no-bundle )
+  #    ^ OBRIGATÓRIO: cargo build direto = binário DEV (tela branca, localhost:5173)
 
   echo "→ 5/5 symlinks em ~/.local/bin…"
   mkdir -p "$HOME/.local/bin"
