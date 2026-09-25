@@ -9,6 +9,8 @@
 //! - **Fail-closed**: sem autorização (polkit), destrutivo NUNCA roda.
 
 pub mod error;
+pub mod backup;
+pub mod net;
 pub mod executor;
 pub mod state;
 pub mod capability;

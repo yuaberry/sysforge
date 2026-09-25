@@ -5,6 +5,8 @@ import BootPage from './pages/BootPage';
 import DoctorPage from './pages/DoctorPage';
 import WindowsPage from './pages/WindowsPage';
 import Placeholder from './pages/Placeholder';
+import BackupPage from './pages/BackupPage';
+import NetworkPage from './pages/NetworkPage';
 
 interface NavItem {
   to: string;
@@ -17,6 +19,8 @@ const NAV_MAIN: NavItem[] = [
   { to: '/discos', label: 'Discos' },
   { to: '/boot', label: 'Boot / UEFI' },
   { to: '/install', label: 'Instalar Sistema' },
+  { to: '/backup', label: 'Backup' },
+  { to: '/redes', label: 'Redes' },
   { to: '/doctor', label: 'Diagnóstico' },
 ];
 
@@ -28,7 +32,6 @@ const NAV_PLANNED: Array<{ to: string; label: string; phase: number; desc: strin
   { to: '/drivers', label: 'Drivers', phase: 6, desc: 'SDI/Windows DevOps — offline injection' },
   { to: '/aplicativos', label: 'Aplicativos', phase: 6, desc: 'Pacotes declarativos pós-install' },
   { to: '/contas', label: 'Contas & Chaves', phase: 5, desc: 'Usuários e ativação — nada é logado em texto puro' },
-  { to: '/redes', label: 'Redes', phase: 7, desc: 'nmcli: Wi-Fi, VLAN, proxy' },
   { to: '/verificacao', label: 'Verificação', phase: 8, desc: 'Pós-boot: health-check automático' },
 ];
 
@@ -70,6 +73,8 @@ export default function App() {
             <Route key={item.to} path={item.to} element={<Placeholder title={item.label} phase={item.phase} desc={item.desc} />} />
           ))}
           <Route path="/install" element={<WindowsPage />} />
+          <Route path="/backup" element={<BackupPage />} />
+          <Route path="/redes" element={<NetworkPage />} />
         </Routes>
       </main>
     </div>

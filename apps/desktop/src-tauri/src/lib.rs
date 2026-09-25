@@ -219,6 +219,31 @@ fn polkit_agent_running() -> bool {
     }).unwrap_or(false)
 }
 
+#[tauri::command]
+fn get_network_info() -> Result<Value, Value> {
+    use sysforge_core::net;
+    let exec = sysforge_core::executor::Executor::default();
+    net::info(&exec).map_err(wire_err).map(|i| serde_json::to_value(i).unwrap_or(Value::Null))
+}
+
+#[tauri::command]
+fn backup_state() -> Result<Value, Value> {
+    let dirs = sysforge_core::backup::user_dirs();
+    let targets = sysforge_core::backup::targets();
+    Ok(serde_json::json!({ "dirs": dirs, "targets": targets }))
+}
+
+#[tauri::command]
+fn backup_estimate(dirs: Vec<String>, target: String) -> Result<Value, Value> {
+    sysforge_core::backup::estimate(&dirs, &target).map_err(wire_err).and_then(|e| Ok(serde_json::to_value(e).unwrap_or(Value::Null)))
+}
+
+#[tauri::command]
+fn backup_run(dirs: Vec<String>, target: String) -> Result<Value, Value> {
+    let exec = sysforge_core::executor::Executor::default();
+    sysforge_core::backup::run(&exec, &dirs, &target).map_err(wire_err)
+}
+
 /// Garante que exista um agente de diálogo polkit para a sessão do app.
 /// Sem ele, pedidos de autorização do daemon morrem em silêncio
 /// (pkcheck fica esperando um diálogo que ninguém mostra — bug real
@@ -270,7 +295,11 @@ pub fn run() {
             unattend_generate,
             unattend_save,
             list_media,
-            save_text_file
+            save_text_file,
+            get_network_info,
+            backup_state,
+            backup_estimate,
+            backup_run
         ])
         .run(tauri::generate_context!())
         .expect("falha ao iniciar o SYSFORGE");

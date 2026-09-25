@@ -201,3 +201,7 @@ export interface DiskBootReadiness {
   ready: boolean;
   blockers: string[];
 }
+
+export interface NetDevice { name: string; kind: string; state: string; connection: string }
+export interface WifiNetwork { ssid: string; signal: number; security: string; active: boolean }
+export interface NetInfo { nmcli_present: boolean; devices: NetDevice[]; wifi: WifiNetwork[] }

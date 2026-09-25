@@ -1,6 +1,6 @@
 [package]
 name = "sysforge-desktop"
-version = "1.3.0"
+version = "1.4.0"
 description = "SYSFORGE — interface desktop (Tauri 2 + React)"
 authors = ["Yua Devs"]
 license = "MIT"
