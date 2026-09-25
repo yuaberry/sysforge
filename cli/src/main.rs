@@ -85,6 +85,10 @@ enum Commands {
         /// Desliga a máquina ao preparar tudo (AO LIGAR, entra direto no instalador)
         #[arg(long)]
         poweroff: bool,
+        /// Método: usb (Ventoy — padrão com pendrive) · disk (SEM pendrive:
+        /// ISO em disco + GRUB/wimboot) · auto (escolhe o que estiver pronto)
+        #[arg(long, default_value = "auto")]
+        method: String,
     },
     /// Mostra as últimas linhas do log do SYSFORGE
     Logs {
@@ -165,6 +169,7 @@ fn main() {
             full_wipe,
             reboot,
             poweroff,
+            method,
         } => commands::install::run(
             json,
             color,
@@ -176,6 +181,7 @@ fn main() {
                 full_wipe,
                 reboot,
                 poweroff,
+                method,
             },
         ),
         Commands::Logs { lines } => commands::logs::run(json, color, lines),

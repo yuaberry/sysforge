@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card, ErrorCard, Skeleton, KV, Badge, useBackend } from './Dashboard';
 import { fmtBytes, backend, toBackendError, usbEntryId } from '../lib/sysforge';
 import ControlPanel from '../components/ControlPanel';
-import type { BackendError, EfiBootState, WindowsChecklist as Checklist, RemovableMedia } from '../types';
+import type { BackendError, EfiBootState, DiskBootReadiness, WindowsChecklist as Checklist, RemovableMedia } from '../types';
 
 type ActionState =
   | { kind: 'idle' }
@@ -43,6 +43,15 @@ export default function WindowsPage() {
   const [fullWipe, setFullWipe] = useState(false);
   const [unattendReady, setUnattendReady] = useState(false);
   const [cd, setCd] = useState<Countdown>(null);
+  const [disk, setDisk] = useState<DiskBootReadiness | null>(null);
+  const [diskBusy, setDiskBusy] = useState(false);
+
+  const refreshDisk = () => {
+    daemonCall('v1.install.disk_readiness', {})
+      .then((r) => setDisk(r as unknown as DiskBootReadiness))
+      .catch(() => setDisk(null));
+  };
+  useEffect(refreshDisk, []);
 
   const refreshMedia = () => {
     backend<RemovableMedia[]>('list_media', {})
@@ -109,6 +118,30 @@ export default function WindowsPage() {
       setCd({ mode, secs: 5 });
     } catch (e) {
       setAction({ kind: 'err', error: toBackendError(e) });
+    }
+  }
+
+  /** SEM PENDRIVE: preparar GRUB+wimboot e reiniciar direto no instalador. */
+  async function launchDiskInstaller(mode: 'reboot' | 'poweroff') {
+    if (!window.confirm(
+      (mode === 'reboot' ? 'REINICIAR AGORA' : 'DESLIGAR AGORA') + ' e entrar direto no instalador do Windows 11 — SEM PENDRIVE?\n\n' +
+      'Isto vai: (1) criar a entrada "SYSFORGE" no menu do GRUB (carrega o instalador da ISO direto para a RAM via wimboot); ' +
+      '(2) definir o próximo boot nela (one-shot); (3) ' + (mode === 'reboot' ? 'reiniciar' : 'desligar') + '.\n' +
+      'Reversível: a entrada GRUB pode ser removida depois; BootOrder intocado.\n\nProsseguir?',
+    )) return;
+    setDiskBusy(true);
+    try {
+      await backend('ensure_system_daemon', {});
+      setAction({ kind: 'working', msg: 'Preparando entrada GRUB + wimboot…' });
+      const prep = await daemonCall('v1.install.disk_prepare', { confirm: true });
+      setAction({ kind: 'ok', msg: `GRUB pronto (ISO: ${prep['iso_path'] ?? '—'}${prep['wimboot_downloaded'] ? ' · wimboot baixado da fonte oficial iPXE' : ''})` });
+      await daemonCall('v1.install.disk_arm', { confirm: true });
+      setAction({ kind: 'ok', msg: 'Próximo boot: DIRETO no instalador (grub-reboot one-shot)' });
+      setCd({ mode, secs: 5 });
+    } catch (e) {
+      setAction({ kind: 'err', error: toBackendError(e) });
+    } finally {
+      setDiskBusy(false);
     }
   }
 
@@ -323,6 +356,38 @@ export default function WindowsPage() {
               </div>
             </Card>
           </div>
+
+          <Card title="Sem pendrive — método Disco + Nuvem" tag="wimboot/GRUB">
+            <p className="dim">
+              Para quem não tem pendrive de 8 GB: a ISO fica no seu disco e o GRUB (que já boota
+              sua máquina) carrega o instalador do Windows direto para a RAM via <code>wimboot</code>.
+              Nenhuma partição é criada, nenhuma alteração no layout — 100% reversível.
+            </p>
+            {disk === null ? (
+              <p className="foot-note">Sondagem do método disco precisa do daemon — clique em "Solicitar privilégio" no painel abaixo e volte aqui.</p>
+            ) : (
+              <>
+                <div className="kv"><span className="kv-k">ISO em disco</span><span className="kv-v">{disk.iso_path ?? <Badge kind="err">ausente — baixe para ~/Downloads</Badge>}</span></div>
+                <div className="kv"><span className="kv-k">Secure Boot</span><span className="kv-v">{disk.secure_boot_off ? <Badge kind="ok">desligado (ok p/ wimboot)</Badge> : <Badge kind="err">ligado — desligue na BIOS</Badge>}</span></div>
+                <div className="kv"><span className="kv-k">GRUB</span><span className="kv-v">{disk.grub_present ? <Badge kind="ok">presente</Badge> : <Badge kind="err">ausente</Badge>}</span></div>
+                <div className="kv"><span className="kv-k">RAM livre</span><span className="kv-v">{disk.ram_ok ? <Badge kind="ok">{disk.ram_available_mb} MiB (precisa {disk.ram_needed_mb})</Badge> : <Badge kind="err">{`${disk.ram_available_mb} MiB < ${disk.ram_needed_mb} MiB`}</Badge>}</span></div>
+                <div className="kv"><span className="kv-k">wimboot</span><span className="kv-v">{disk.wimboot_present ? <Badge kind="ok">instalado</Badge> : <Badge kind="info">será baixado (iPXE oficial) na preparação</Badge>}</span></div>
+                <div className="btn-row">
+                  <button className="btn-primary" disabled={!disk.ready || diskBusy} onClick={() => launchDiskInstaller('reboot')}>
+                    ⚡ Sem pendrive: preparar e reiniciar
+                  </button>
+                  <button className="btn-off" disabled={!disk.ready || diskBusy} onClick={() => launchDiskInstaller('poweroff')}>
+                    ⏻ Preparar e desligar (ao ligar, instala)
+                  </button>
+                </div>
+                {!disk.ready && (
+                  <p className="foot-note">
+                    Pendências: {disk.blockers.join(' · ')}
+                  </p>
+                )}
+              </>
+            )}
+          </Card>
 
           {efi.state === 'ok' && <ControlPanel efi={efi.data} showEntrySelector />}
         </>

@@ -6,9 +6,11 @@
 //! instalador do Windows (com nossas respostas). Nada é fingido.
 
 pub mod checklist;
+pub mod diskboot;
 pub mod media;
 pub mod unattend;
 
 pub use checklist::{run_checklist, ChecklistItem, ItemStatus, WindowsChecklist};
+pub use diskboot::{readiness, prepare, arm_grub_next_boot, revert, DiskBootReadiness};
 pub use media::{list_removable_media, copy_with_progress, RemovableMedia};
 pub use unattend::{generate_autounattend, UnattendConfig};

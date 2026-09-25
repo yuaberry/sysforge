@@ -186,3 +186,18 @@ export interface WindowsChecklist {
   media: RemovableMedia[];
   recommendation: string;
 }
+
+/** Sondagem do método disco (sem pendrive) — daemon v1.install.disk_readiness */
+export interface DiskBootReadiness {
+  iso_path: string | null;
+  secure_boot_off: boolean;
+  grub_present: boolean;
+  update_grub_present: boolean;
+  ram_available_mb: number;
+  ram_needed_mb: number;
+  ram_ok: boolean;
+  wimboot_present: boolean;
+  wimboot_needs_download: boolean;
+  ready: boolean;
+  blockers: string[];
+}

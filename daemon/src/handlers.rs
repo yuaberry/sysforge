@@ -17,6 +17,7 @@ use sysforge_core::ipc::protocol::{
     METHOD_BOOT_REBOOT_TO_FIRMWARE, METHOD_BOOT_REMOVE_ENTRY, METHOD_BOOT_SET_NEXT,
     METHOD_BOOT_SNAPSHOT, METHOD_CAPABILITIES, METHOD_DAEMON_INFO, METHOD_DAEMON_SHUTDOWN,
     METHOD_DISKS_LIST, METHOD_ECHO, METHOD_EFI_ENTRIES, METHOD_SYSTEM_INFO, METHOD_SYSTEM_POWEROFF,
+    METHOD_INSTALL_DISK_READINESS, METHOD_INSTALL_DISK_PREPARE, METHOD_INSTALL_DISK_ARM, METHOD_INSTALL_DISK_REVERT,
     METHOD_SYSTEM_REBOOT, PROTOCOL_VERSION,
 };
 use sysforge_core::power;
@@ -172,6 +173,25 @@ fn handle(req: &Request, cfg: &Config, _peer: &Peer) -> Result<serde_json::Value
             // Verificação de verdade: releitura do estado após a limpeza.
             let after = BootSnapshot::capture(&exec)?;
             Ok(json!({ "cleared": after.state.boot_next.is_none() }))
+        }
+
+        // ── Método DISCO: instalar sem pendrive (ISO em disco + GRUB/wimboot) ──
+        METHOD_INSTALL_DISK_READINESS => {
+            Ok(serde_json::to_value(sysforge_core::windows::diskboot::readiness())?)
+        }
+        METHOD_INSTALL_DISK_PREPARE => {
+            require_confirm(req)?;
+            sysforge_core::windows::diskboot::prepare(&exec)
+        }
+        METHOD_INSTALL_DISK_ARM => {
+            require_confirm(req)?;
+            sysforge_core::windows::diskboot::arm_grub_next_boot(&exec)?;
+            Ok(json!({ "armed": true, "via": "grub-reboot (one-shot)" }))
+        }
+        METHOD_INSTALL_DISK_REVERT => {
+            require_confirm(req)?;
+            sysforge_core::windows::diskboot::revert(&exec)?;
+            Ok(json!({ "reverted": true }))
         }
 
         METHOD_BOOT_REMOVE_ENTRY => {

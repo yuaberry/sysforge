@@ -12,7 +12,10 @@ use sysforge_core::boot::efi::read_efi_state;
 use sysforge_core::error::{ErrorDomain, SysforgeError};
 use sysforge_core::executor::Executor;
 use sysforge_core::ipc::client::YuaClient;
-use sysforge_core::ipc::protocol::{METHOD_BOOT_SET_NEXT, METHOD_SYSTEM_POWEROFF, METHOD_SYSTEM_REBOOT};
+use sysforge_core::ipc::protocol::{
+    METHOD_BOOT_SET_NEXT, METHOD_SYSTEM_POWEROFF, METHOD_SYSTEM_REBOOT,
+    METHOD_INSTALL_DISK_ARM, METHOD_INSTALL_DISK_PREPARE,
+};
 use sysforge_core::windows::checklist::{ItemStatus, run_checklist};
 use sysforge_core::windows::media::copy_with_progress;
 use sysforge_core::windows::unattend::{generate_autounattend, UnattendConfig, WINDOWS11_DOWNLOAD_URL};
@@ -28,6 +31,7 @@ pub struct InstallOpts {
     pub full_wipe: bool,
     pub reboot: bool,
     pub poweroff: bool,
+    pub method: String,
 }
 
 pub fn run(json: bool, color: bool, opts: InstallOpts) -> Result<(), SysforgeError> {
@@ -219,6 +223,28 @@ mídia/checklist já é agnóstica de SO; falta o autoboot por distro.",
                     ui::tag_warn(color)
                 );
             }
+        }
+    }
+
+    // 3.5 MÉTODO DISCO (sem pendrive): ISO em disco + GRUB/wimboot.
+    if opts.apply && opts.method != "usb" {
+        let ready = sysforge_core::windows::diskboot::readiness();
+        let usb_ativo = read_efi_state(&Executor::default()).ok().and_then(|s| s.usb_entry_id().map(|_| true)).unwrap_or(false);
+        let use_disk = opts.method == "disk" || (opts.method == "auto" && !usb_ativo && ready.ready);
+        if use_disk {
+            println!("\n  {} MÉTODO DISCO — sem pendrive: ISO em disco + GRUB carrega o instalador na RAM (wimboot)", ui::tag_info(color));
+            if !ready.ready {
+                for b in &ready.blockers {
+                    println!("  {} {}", ui::tag_fail(color), b);
+                }
+                return Err(SysforgeError::new(ErrorDomain::Boot, 21, "Método disco não está pronto"));
+            }
+            let sock = ensure_system_daemon(color)?;
+            let mut client = YuaClient::connect(&sock)?;
+            client.call_interactive(METHOD_INSTALL_DISK_PREPARE, json!({"confirm": true}))?;
+            println!("  {} entrada GRUB criada + wimboot garantido", ui::tag_ok(color));
+            client.call_interactive(METHOD_INSTALL_DISK_ARM, json!({"confirm": true}))?;
+            println!("  {} próximo boot: DIRETO no instalador do Windows 11 (grub-reboot one-shot)", ui::tag_ok(color));
         }
     }
 

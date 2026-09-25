@@ -43,6 +43,15 @@ pub const METHOD_BOOT_ARM_FIRMWARE: &str = "v1.boot.arm_firmware";
 pub const METHOD_SYSTEM_REBOOT: &str = "v1.system.reboot";
 /// Desligamento imediato. Params: {confirm:true}
 pub const METHOD_SYSTEM_POWEROFF: &str = "v1.system.poweroff";
+/// Método DISCO (sem pendrive): sondagem de prontidão (read-only).
+pub const METHOD_INSTALL_DISK_READINESS: &str = "v1.install.disk_readiness";
+/// Método DISCO: escreve entrada GRUB + garante wimboot (privileged).
+pub const METHOD_INSTALL_DISK_PREPARE: &str = "v1.install.disk_prepare";
+/// Método DISCO: próximo boot direto no instalador (grub-reboot one-shot).
+pub const METHOD_INSTALL_DISK_ARM: &str = "v1.install.disk_arm";
+/// Método DISCO: remove a entrada GRUB e restaura o boot normal.
+pub const METHOD_INSTALL_DISK_REVERT: &str = "v1.install.disk_revert";
+
 /// Encerra o daemon de forma limpa (para trocar binário sem sudo/reboot).
 /// Params: {confirm:true}
 pub const METHOD_DAEMON_SHUTDOWN: &str = "v1.daemon.shutdown";
@@ -58,6 +67,9 @@ pub const PRIVILEGED_METHODS: &[&str] = &[
     METHOD_SYSTEM_REBOOT,
     METHOD_SYSTEM_POWEROFF,
     METHOD_DAEMON_SHUTDOWN,
+    METHOD_INSTALL_DISK_PREPARE,
+    METHOD_INSTALL_DISK_ARM,
+    METHOD_INSTALL_DISK_REVERT,
 ];
 
 /// Métodos que serão destrutivos no futuro (wipe/format/deploy) — recusados
