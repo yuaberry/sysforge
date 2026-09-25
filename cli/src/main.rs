@@ -82,6 +82,9 @@ enum Commands {
         /// Reinicia após aplicar (boot pelo pendrive)
         #[arg(long)]
         reboot: bool,
+        /// Desliga a máquina ao preparar tudo (AO LIGAR, entra direto no instalador)
+        #[arg(long)]
+        poweroff: bool,
     },
     /// Mostra as últimas linhas do log do SYSFORGE
     Logs {
@@ -161,6 +164,7 @@ fn main() {
             edition,
             full_wipe,
             reboot,
+            poweroff,
         } => commands::install::run(
             json,
             color,
@@ -171,6 +175,7 @@ fn main() {
                 edition,
                 full_wipe,
                 reboot,
+                poweroff,
             },
         ),
         Commands::Logs { lines } => commands::logs::run(json, color, lines),

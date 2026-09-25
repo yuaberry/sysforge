@@ -13,7 +13,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
-VER="${1:-1.1.1}"
+VER="${1:-1.2.0}"
 REL="$ROOT/target/release"
 APP_REL="$ROOT/apps/desktop/src-tauri/target/release"
 OUT="$REL/sysforge_amd64.deb"

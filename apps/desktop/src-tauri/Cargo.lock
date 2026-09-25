@@ -3012,7 +3012,7 @@ dependencies = [
 
 [[package]]
 name = "sysforge-core"
-version = "1.1.1"
+version = "1.2.0"
 dependencies = [
  "chrono",
  "libc",
@@ -3027,7 +3027,7 @@ dependencies = [
 
 [[package]]
 name = "sysforge-desktop"
-version = "1.1.1"
+version = "1.2.0"
 dependencies = [
  "serde",
  "serde_json",

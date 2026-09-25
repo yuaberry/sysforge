@@ -12,7 +12,7 @@ use sysforge_core::boot::efi::read_efi_state;
 use sysforge_core::error::{ErrorDomain, SysforgeError};
 use sysforge_core::executor::Executor;
 use sysforge_core::ipc::client::YuaClient;
-use sysforge_core::ipc::protocol::{METHOD_BOOT_SET_NEXT, METHOD_SYSTEM_REBOOT};
+use sysforge_core::ipc::protocol::{METHOD_BOOT_SET_NEXT, METHOD_SYSTEM_POWEROFF, METHOD_SYSTEM_REBOOT};
 use sysforge_core::windows::checklist::{ItemStatus, run_checklist};
 use sysforge_core::windows::media::copy_with_progress;
 use sysforge_core::windows::unattend::{generate_autounattend, UnattendConfig, WINDOWS11_DOWNLOAD_URL};
@@ -27,6 +27,7 @@ pub struct InstallOpts {
     pub edition: String,
     pub full_wipe: bool,
     pub reboot: bool,
+    pub poweroff: bool,
 }
 
 pub fn run(json: bool, color: bool, opts: InstallOpts) -> Result<(), SysforgeError> {
@@ -221,25 +222,33 @@ mídia/checklist já é agnóstica de SO; falta o autoboot por distro.",
         }
     }
 
-    // 4. Reboot final (explícito)
-    if opts.reboot {
+    // 4. Ação final automática: reboot ou poweroff — o firmware consome o
+    // BootNext one-shot e entra DIRETO no instalador, sem intervenção.
+    if opts.reboot || opts.poweroff {
         let sock = ensure_system_daemon(color)?;
         let mut client = YuaClient::connect(&sock)?;
+        let acao = if opts.reboot { "REINICIAR" } else { "DESLIGAR" };
         println!(
-            "\n  {} TUDO PRONTO. O pendrive assume no próximo boot com o instalador do Windows 11.",
-            ui::tag_ok(color)
+            "\n  {} TUDO PRONTO. {} AGORA — ao voltar, a máquina entra DIRETO no instalador do Windows 11 (BootNext one-shot consumido pelo firmware).",
+            ui::tag_ok(color),
+            acao
         );
-        println!("  {} 5s para reiniciar — Ctrl+C para abortar…", ui::tag_warn(color));
+        if opts.poweroff {
+            println!("  {} desligando: pressione o botão de energia normalmente para ligar e instalar", ui::tag_warn(color));
+        }
+        println!("  {} 5s para {} — Ctrl+C para abortar…", ui::tag_warn(color), acao.to_lowercase());
         for i in (1..=5).rev() {
             println!("      {i}…");
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
-        let _ = client.call_interactive(METHOD_SYSTEM_REBOOT, json!({"confirm": true}))?;
+        let method = if opts.reboot { METHOD_SYSTEM_REBOOT } else { METHOD_SYSTEM_POWEROFF };
+        let _ = client.call_interactive(method, json!({"confirm": true}))?;
     } else {
         println!(
-            "\n  {} quando estiver pronto: `sysforge power reboot --confirm` (ou `sysforge install --apply --reboot`)",
-            paint("→", "cyan", color)
+            "\n  agora escolha o desligamento automático:"
         );
+        println!("      {} `sysforge install --apply --reboot`   → reinicia e ENTRA NO INSTALADOR sozinho", paint("→", "cyan", color));
+        println!("      {} `sysforge install --apply --poweroff` → desliga; AO LIGAR, entra no instalador", paint("→", "cyan", color));
     }
     Ok(())
 }

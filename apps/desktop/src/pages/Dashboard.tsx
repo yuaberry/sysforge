@@ -92,6 +92,20 @@ export default function Dashboard() {
                 sys.data.memory.total_kb * 1024,
               )}`}
             />
+            <div className="bar">
+              <div className="bar-label">
+                <span>memória em uso</span>
+                <span>{Math.round(((sys.data.memory.total_kb - sys.data.memory.available_kb) / sys.data.memory.total_kb) * 100)}%</span>
+              </div>
+              <div className="bar-track">
+                <div
+                  className="bar-fill"
+                  style={{
+                    width: `${Math.min(100, ((sys.data.memory.total_kb - sys.data.memory.available_kb) / sys.data.memory.total_kb) * 100)}%`,
+                  }}
+                />
+              </div>
+            </div>
             <KV k="Uptime" v={fmtUptime(sys.data.uptime_secs)} />
           </Card>
 
@@ -109,17 +123,49 @@ export default function Dashboard() {
                 )
               }
             />
-            {esp.state === 'ok' && esp.data.mounted ? (
+            {efi.state === 'ok' && (
               <KV
-                k="ESP"
-                v={`${esp.data.device} · ${fmtBytes(esp.data.free_bytes)} livres de ${fmtBytes(esp.data.total_bytes)}`}
-                mono
+                k="BootNext"
+                v={efi.data.boot_next ? <Badge kind="info">{efi.data.boot_next} (one-shot)</Badge> : <span className="dim">não armado</span>}
               />
+            )}
+            {esp.state === 'ok' && esp.data.mounted ? (
+              <>
+                <KV
+                  k="ESP"
+                  v={`${esp.data.device} · ${fmtBytes(esp.data.free_bytes)} livres de ${fmtBytes(esp.data.total_bytes)}`}
+                  mono
+                />
+                <div className="bar">
+                  <div className="bar-label">
+                    <span>partição ESP</span>
+                    <span>{Math.round((esp.data.free_bytes / esp.data.total_bytes) * 100)}% livre</span>
+                  </div>
+                  <div className="bar-track">
+                    <div
+                      className={`bar-fill${esp.data.free_bytes / esp.data.total_bytes < 0.15 ? ' warn' : ''}`}
+                      style={{ width: `${Math.min(100, (esp.data.free_bytes / esp.data.total_bytes) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </>
             ) : (
               esp.state === 'ok' && <KV k="ESP" v={<Badge kind="err">não montada (SF-BOOT-002)</Badge>} />
             )}
             {efi.state === 'ok' && bootEntry && (
               <KV k="Boot atual" v={`${bootEntry.id} · ${bootEntry.name}`} mono />
+            )}
+            {efi.state === 'ok' && (
+              <div className="chips">
+                {efi.data.boot_order.slice(0, 8).map((id) => {
+                  const e = efi.data.entries.find((x) => x.id === id);
+                  return (
+                    <span key={id} className={`chip${id === efi.data.boot_current ? ' current' : ''}`}>
+                      {id} {e ? e.name.slice(0, 14) : ''}
+                    </span>
+                  );
+                })}
+              </div>
             )}
           </Card>
 
