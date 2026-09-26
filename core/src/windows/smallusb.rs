@@ -99,7 +99,13 @@ pub fn plan(stick: &str, edition_index: u32) -> Result<SmallUsbPlan, SysforgeErr
     let esd_path = std::path::Path::new(WORK_DIR).join(format!("install-{edition_index}.esd"));
     let esd_cached = esd_path.exists();
     let stick_size = fs_bytes(Path::new(stick));
-    let esd_estimate: u64 = 2_800_000_000; // Pro LZMS real observado ≈ 2,4–2,8 GB
+    // Cache existe = tamanho REAL (promessa verdadeira); senão estimativa
+    // honesta da compressão SÓLIDA oficial (~2,6 GB p/ edição Pro).
+    let esd_size = if esd_cached {
+        std::fs::metadata(&esd_path).map(|m| m.len()).unwrap_or(3_000_000_000)
+    } else {
+        2_600_000_000
+    };
     Ok(SmallUsbPlan {
         stick: stick.to_string(),
         stick_size_bytes: stick_size,
@@ -107,7 +113,7 @@ pub fn plan(stick: &str, edition_index: u32) -> Result<SmallUsbPlan, SysforgeErr
         edition_name: edition,
         boot_tree_bytes,
         esd_cached,
-        fits: stick_size > (boot_tree_bytes + esd_estimate),
+        fits: stick_size > (boot_tree_bytes + esd_size),
     })
 }
 
@@ -142,6 +148,7 @@ pub fn build(
             .arg(edition_index.to_string())
             .arg(esd.display().to_string())
             .arg("--compress=LZMS")
+            .arg("--solid")  // compressão sólida oficial (install.esd da MS): ~20% menor — sem isto NÃO cabe em 4GB
             .env("WIMLIB_IMAGEX_USE_UTF8", "1")
             .timeout(std::time::Duration::from_secs(60 * 60 * 2));
         let r = exec.run_low_risk(spec)?;
