@@ -106,7 +106,10 @@ export default function WindowsPage() {
       const verb = mode === 'reboot' ? 'REINICIAR AGORA' : 'DESLIGAR AGORA';
 
       const useUsb = ventoy && !!usb;
-      const useDisk = !useUsb && diskNow.ready;
+      // MÉTODO DISCO SAI do automático: o setup do Windows não lê ext4, então
+      // ele boota o PE mas não acha o install.wim — não completa a instalação.
+      // Automático = só caminhos 100% funcionais (pendrive Ventoy ou otimizado).
+      const useDisk = false;
 
       if (!useUsb && !useDisk) {
         const faltas = [
@@ -119,7 +122,9 @@ export default function WindowsPage() {
           error: {
             code: 'SF-BOOT-030',
             message: 'Ainda não há um caminho pronto para instalar.',
-            recommendation: faltas.filter((f, i, a) => a.indexOf(f) === i).join(' · ') || 'verifique o checklist abaixo',
+            recommendation: (ventoy
+              ? 'Pendrive Ventoy detectado mas sem entrada USB ativa no firmware — reconecte o pendrive'
+              : 'Conecte QUALQUER pendrive ≥ 4GB e use o cartão “Pendrive otimizado” (embaixo) — ele monta a mídia de boot direta e a instalação completa funciona nele'),
           },
         });
         return;
@@ -391,9 +396,11 @@ export default function WindowsPage() {
 
           <Card title="Sem pendrive — método Disco + Nuvem" tag="wimboot/GRUB">
             <p className="dim">
-              Para quem não tem pendrive de 8 GB: a ISO fica no seu disco e o GRUB (que já boota
-              sua máquina) carrega o instalador do Windows direto para a RAM via <code>wimboot</code>.
-              Nenhuma partição é criada, nenhuma alteração no layout — 100% reversível.
+              Para quem não tem pendrive: a ISO fica no seu disco e o GRUB carrega o instalador
+              via <code>wimboot</code>. <b>Limitação real descoberta em campo:</b> o setup do Windows
+              não lê partições ext4 — este método abre o instalador (útil p/ WinPE/recuperação),
+              mas <b>não completa a instalação</b> sozinho. Para instalar de verdade, use o
+              pendrive otimizado abaixo (funciona com o seu de 4 GB).
             </p>
             {disk === null ? (
               <p className="foot-note">Sondagem do método disco precisa do daemon — clique em "Solicitar privilégio" no painel abaixo e volte aqui.</p>

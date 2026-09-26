@@ -557,7 +557,7 @@ dependencies = [
 
 [[package]]
 name = "sysforge-cli"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "chrono",
  "clap",
@@ -571,7 +571,7 @@ dependencies = [
 
 [[package]]
 name = "sysforge-core"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "chrono",
  "libc",
@@ -586,7 +586,7 @@ dependencies = [
 
 [[package]]
 name = "sysforge-osd"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "chrono",
  "libc",
