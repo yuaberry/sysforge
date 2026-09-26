@@ -49,9 +49,21 @@ pub struct DiskBootReadiness {
 }
 
 /// Encontra a maior ISO de Windows em ~/Downloads (mesma regra do checklist).
+/// CRÍTICO: o daemon roda como ROOT (HOME=/root) — a ISO do usuário vive em
+/// /home/<user>/Downloads, então varremos as duas, além dos $HOME alternativos.
 pub fn find_iso() -> Option<PathBuf> {
-    let home = std::env::var_os("HOME")?;
-    for dir in [PathBuf::from(&home).join("Downloads"), PathBuf::from(&home)] {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(home) = std::env::var_os("HOME") {
+        let h = PathBuf::from(&home);
+        candidates.push(h.join("Downloads"));
+        candidates.push(h);
+    }
+    if let Ok(rd) = std::fs::read_dir("/home") {
+        for u in rd.flatten() {
+            candidates.push(u.path().join("Downloads"));
+        }
+    }
+    for dir in candidates {
         let mut best: Option<(u64, PathBuf)> = None;
         if let Ok(rd) = std::fs::read_dir(&dir) {
             for e in rd.flatten() {
