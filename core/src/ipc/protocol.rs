@@ -51,6 +51,11 @@ pub const METHOD_INSTALL_DISK_PREPARE: &str = "v1.install.disk_prepare";
 pub const METHOD_INSTALL_DISK_ARM: &str = "v1.install.disk_arm";
 /// Método DISCO: remove a entrada GRUB e restaura o boot normal.
 pub const METHOD_INSTALL_DISK_REVERT: &str = "v1.install.disk_revert";
+/// Pendrive otimizado (4GB): monta mídia de boot DIRETA da edição escolhida.
+/// DESTRUTIVO no pendrive (apaga tudo dele) — confirm obrigatório.
+pub const METHOD_INSTALL_SMALL_USB_BUILD: &str = "v1.install.small_usb_build";
+/// Plano do pendrive otimizado (espaço/deps — read-only).
+pub const METHOD_INSTALL_SMALL_USB_PLAN: &str = "v1.install.small_usb_plan";
 
 /// Encerra o daemon de forma limpa (para trocar binário sem sudo/reboot).
 /// Params: {confirm:true}
@@ -70,6 +75,7 @@ pub const PRIVILEGED_METHODS: &[&str] = &[
     METHOD_INSTALL_DISK_PREPARE,
     METHOD_INSTALL_DISK_ARM,
     METHOD_INSTALL_DISK_REVERT,
+    METHOD_INSTALL_SMALL_USB_BUILD,
 ];
 
 /// Métodos que serão destrutivos no futuro (wipe/format/deploy) — recusados

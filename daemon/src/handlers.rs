@@ -18,6 +18,7 @@ use sysforge_core::ipc::protocol::{
     METHOD_BOOT_SNAPSHOT, METHOD_CAPABILITIES, METHOD_DAEMON_INFO, METHOD_DAEMON_SHUTDOWN,
     METHOD_DISKS_LIST, METHOD_ECHO, METHOD_EFI_ENTRIES, METHOD_SYSTEM_INFO, METHOD_SYSTEM_POWEROFF,
     METHOD_INSTALL_DISK_READINESS, METHOD_INSTALL_DISK_PREPARE, METHOD_INSTALL_DISK_ARM, METHOD_INSTALL_DISK_REVERT,
+    METHOD_INSTALL_SMALL_USB_BUILD, METHOD_INSTALL_SMALL_USB_PLAN,
     METHOD_SYSTEM_REBOOT, PROTOCOL_VERSION,
 };
 use sysforge_core::power;
@@ -192,6 +193,21 @@ fn handle(req: &Request, cfg: &Config, _peer: &Peer) -> Result<serde_json::Value
             require_confirm(req)?;
             sysforge_core::windows::diskboot::revert(&exec)?;
             Ok(json!({ "reverted": true }))
+        }
+
+        // ── Pendrive otimizado (4GB): mídia de boot DIRETA, 100% padrão Microsoft ──
+        METHOD_INSTALL_SMALL_USB_PLAN => {
+            let dev = require_str(req, "device")?;
+            let edition: u32 = req.params.get("edition_index").and_then(|v| v.as_u64()).unwrap_or(4) as u32;
+            sysforge_core::windows::smallusb::plan(&dev, edition).map(|p| serde_json::to_value(p).unwrap_or(json!(null)))
+        }
+        METHOD_INSTALL_SMALL_USB_BUILD => {
+            require_confirm(req)?;
+            let dev = require_str(req, "device")?;
+            let edition: u32 = req.params.get("edition_index").and_then(|v| v.as_u64()).unwrap_or(4) as u32;
+            let unattend = req.params.get("autounattend").and_then(|v| v.as_str()).map(std::path::PathBuf::from);
+            let identity = sysforge_core::disk::DiskIdentity::probe(&exec, &dev)?;
+            sysforge_core::windows::smallusb::build(&exec, &identity, edition, unattend.as_deref())
         }
 
         METHOD_BOOT_REMOVE_ENTRY => {

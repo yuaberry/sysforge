@@ -40,6 +40,8 @@ export default function WindowsPage() {
   const [action, setAction] = useState<ActionState>({ kind: 'idle' });
   const [media, setMedia] = useState<RemovableMedia[]>([]);
   const [edition, setEdition] = useState('pro');
+  const [smallStick, setSmallStick] = useState('');
+  const [smallEdition, setSmallEdition] = useState(4);
   const [fullWipe, setFullWipe] = useState(false);
   const [unattendReady, setUnattendReady] = useState(false);
   const [cd, setCd] = useState<Countdown>(null);
@@ -147,6 +149,32 @@ export default function WindowsPage() {
         });
       }
       setCd({ mode, secs: 5 });
+    } catch (e) {
+      setAction({ kind: 'err', error: toBackendError(e) });
+    }
+  }
+
+  /** Pendrive otimizado: mídia de boot direta para pendrive de 4 GB. */
+  async function buildSmallUsb() {
+    if (!smallStick) return;
+    const planR = await daemonCall('v1.install.small_usb_plan', { device: smallStick, edition_index: smallEdition })
+      .catch((e) => { setAction({ kind: 'err', error: toBackendError(e) }); return null; });
+    if (!planR) return;
+    if (!planR['fits']) {
+      setAction({ kind: 'err', error: { code: 'SF-DISK-021', message: `Sem espaço: pendrive ${fmtBytes(planR['stick_size_bytes'] as number)} < mídia otimizada estimada (~4,1 GB)` } });
+      return;
+    }
+    if (!window.confirm(
+      `APAGAR TODO O CONTEÚDO DE ${smallStick} e montar a mídia de instalação direta (${planR['edition_name']})?\n` +
+      'Esta mídia é padrão Microsoft: a firmware boota direto. Seu computador NÃO é tocado.',
+    )) return;
+    setAction({ kind: 'working', msg: 'Montando mídia otimizada (export comprime ~30-60 min na 1ª vez, depois usa cache)…' });
+    try {
+      const r = await daemonCall('v1.install.small_usb_build', {
+        device: smallStick, edition_index: smallEdition, confirm: true,
+        autounattend: '/home/llinux/Downloads/autounattend.xml',
+      });
+      setAction({ kind: 'ok', msg: `✔ Pendrive pronto (${r['edition']}). Agora clique em ⚡ Reiniciar e instalar — a firmware boota o pendrive.` });
     } catch (e) {
       setAction({ kind: 'err', error: toBackendError(e) });
     }
@@ -383,6 +411,37 @@ export default function WindowsPage() {
                 )}
               </>
             )}
+          </Card>
+
+          <Card title="Pendrive otimizado — boot direto (para pendrive de 4 GB)" tag="100% padrão Microsoft">
+            <p className="dim">
+              A ISO oficial não cabe num pendrive de 4 GB — mas uma mídia de boot <b>direta</b> com UMA edição
+              comprimida no formato oficial (<code>install.esd</code>) cabe com folga. O resultado é um pendrive
+              FAT32 padrão: a firmware boota nativamente, como na mídia da Microsoft. <b className="danger">Isto APAGA o pendrive inteiro.</b>
+            </p>
+            <div className="form-row">
+              <label>Pendrive</label>
+              <select value={smallStick} onChange={(e) => setSmallStick(e.target.value)}>
+                <option value="">— conecte um pendrive ≥ 4 GB —</option>
+                {media.filter((m) => m.size_bytes > 3_000_000_000).map((m) => (
+                  <option key={m.name} value={'/dev/' + m.name}>
+                    /dev/{m.name} · {fmtBytes(m.size_bytes)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-row">
+              <label>Edição</label>
+              <select value={smallEdition} onChange={(e) => setSmallEdition(Number(e.target.value))}>
+                <option value={1}>Windows 11 Home</option>
+                <option value={4}>Windows 11 Pro</option>
+              </select>
+            </div>
+            <div className="btn-row">
+              <button className="danger" disabled={!smallStick} onClick={() => buildSmallUsb()}>
+                🔨 Preparar pendrive otimizado (apaga o pendrive)
+              </button>
+            </div>
           </Card>
 
           {efi.state === 'ok' && <ControlPanel efi={efi.data} showEntrySelector />}
