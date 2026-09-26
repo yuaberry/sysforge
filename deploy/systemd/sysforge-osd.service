@@ -13,7 +13,9 @@ Group=root
 # adicionará ReadWritePaths=/boot/efi com justificativa em SECURITY.md.
 NoNewPrivileges=yes
 ProtectSystem=strict
-ProtectHome=yes
+# read-only, não yes: o daemon precisa LER a ISO do usuário em /home/...
+# (método disco sem pendrive). Escrita em /home: NUNCA — o sandbox bloqueia.
+ProtectHome=read-only
 PrivateTmp=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
