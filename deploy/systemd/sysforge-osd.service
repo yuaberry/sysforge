@@ -19,7 +19,11 @@ ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes
-ReadWritePaths=/var/lib/sysforge
+# O método disco (sem pendrive) precisa escrever em 4 lugares, nada além:
+#  - /etc/grub.d        (entrada 40_sysforge — arquivo próprio, reversível)
+#  - /etc/default       (GRUB_DEFAULT=saved, pré-requisito do grub-reboot)
+#  - /boot/grub         (grub.cfg pelo update-grub + grubenv pelo grub-reboot)
+ReadWritePaths=/var/lib/sysforge /etc/grub.d /etc/default /boot/grub
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=sysforge-osd
