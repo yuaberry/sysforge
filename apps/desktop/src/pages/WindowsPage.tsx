@@ -46,12 +46,17 @@ export default function WindowsPage() {
   const [disk, setDisk] = useState<DiskBootReadiness | null>(null);
   const [diskBusy, setDiskBusy] = useState(false);
 
+  // Sondagem IN-PROCESS (sem daemon, sempre fresca) — atualiza a cada 5s.
   const refreshDisk = () => {
-    daemonCall('v1.install.disk_readiness', {})
-      .then((r) => setDisk(r as unknown as DiskBootReadiness))
+    backend<DiskBootReadiness>('get_disk_readiness', {})
+      .then(setDisk)
       .catch(() => setDisk(null));
   };
   useEffect(refreshDisk, []);
+  useEffect(() => {
+    const t = setInterval(refreshDisk, 5000);
+    return () => clearInterval(t);
+  }, []);
 
   const refreshMedia = () => {
     backend<RemovableMedia[]>('list_media', {})
@@ -83,65 +88,67 @@ export default function WindowsPage() {
 
   /** SEQUÊNCIA AUTOMÁTICA COMPLETA: privilégio → BootNext(USB) → desligar/reiniciar.
    *  A máquina volta DIRETO no instalador — sem nenhuma etapa manual. */
+  /** LANÇADOR ÚNICO — decide o método NA HORA do clique, com dados frescos:
+   *  pendrive Ventoy ativo → USB; senão disco pronto (sem pendrive) → GRUB/wimboot.
+   *  Botão nunca fica morto: se nada estiver pronto, o erro aparece aqui embaixo. */
   async function launchInstaller(mode: 'reboot' | 'poweroff') {
-    const verb = mode === 'reboot' ? 'REINICIAR AGORA' : 'DESLIGAR AGORA';
-    if (!window.confirm(
-      `${verb} e entrar direto no instalador do Windows 11?\n\n` +
-      'Isto vai: (1) armazenar BootNext one-shot apontando pro pendrive; ' +
-      '(2) ' + (mode === 'reboot' ? 'reiniciar' : 'desligar') + ' a máquina.\n' +
-      'O BootOrder fica INTACTO — se o pendrive não bootar, o boot volta ao normal sozinho.\n\nProsseguir?',
-    )) return;
-    setAction({ kind: 'working', msg: 'Solicitando privilégio (polkit pode pedir sua senha)…' });
+    setAction({ kind: 'working', msg: 'Sondando o que está pronto (mídia, firmware, disco)…' });
     try {
-      await backend('ensure_system_daemon', {});
-      const state = await backend<EfiBootState>('get_efi_state', {});
-      const usb = usbEntryId(state);
-      if (!usb) {
+      const [mediaNow, efiNow, diskNow] = await Promise.all([
+        backend<RemovableMedia[]>('list_media', {}).catch(() => [] as RemovableMedia[]),
+        backend<EfiBootState>('get_efi_state', {}).catch(() => null),
+        backend<DiskBootReadiness>('get_disk_readiness', {}),
+      ]);
+      const ventoy = mediaNow.some((m) => m.is_ventoy);
+      const usb = efiNow ? usbEntryId(efiNow) : undefined;
+      const verb = mode === 'reboot' ? 'REINICIAR AGORA' : 'DESLIGAR AGORA';
+
+      const useUsb = ventoy && !!usb;
+      const useDisk = !useUsb && diskNow.ready;
+
+      if (!useUsb && !useDisk) {
+        const faltas = [
+          ...(diskNow.iso_path ? [] : ['ISO do Windows não encontrada em ~/Downloads']),
+          ...diskNow.blockers,
+          ...(!ventoy && !usb && !diskNow.ready ? ['nem pendrive Ventoy nem método disco pronto'] : []),
+        ];
         setAction({
           kind: 'err',
           error: {
-            code: 'SF-BOOT-006',
-            message: 'Nenhuma entrada USB ATIVA no firmware para auto-detectar.',
-            recommendation: 'Conecte o pendrive (Ventoy com a ISO dentro) e tente de novo — o firmware só ativa a entrada removível com mídia presente.',
+            code: 'SF-BOOT-030',
+            message: 'Ainda não há um caminho pronto para instalar.',
+            recommendation: faltas.filter((f, i, a) => a.indexOf(f) === i).join(' · ') || 'verifique o checklist abaixo',
           },
         });
         return;
       }
-      setAction({ kind: 'working', msg: `Armando BootNext → ${usb} (one-shot)…` });
-      const r = await daemonCall('v1.boot.set_next', { entry_id: usb, confirm: true });
-      setAction({
-        kind: 'ok',
-        msg: `BootNext armado → ${usb}. ${mode === 'reboot' ? 'Reiniciando' : 'Desligando'}…`,
-      });
-      const snap = typeof r['snapshot_path'] === 'string' ? ` · snapshot: ${r['snapshot_path']}` : '';
-      setAction({ kind: 'ok', msg: `BootNext armado → ${usb}${snap}` });
-      setCd({ mode, secs: 5 });
-    } catch (e) {
-      setAction({ kind: 'err', error: toBackendError(e) });
-    }
-  }
 
-  /** SEM PENDRIVE: preparar GRUB+wimboot e reiniciar direto no instalador. */
-  async function launchDiskInstaller(mode: 'reboot' | 'poweroff') {
-    if (!window.confirm(
-      (mode === 'reboot' ? 'REINICIAR AGORA' : 'DESLIGAR AGORA') + ' e entrar direto no instalador do Windows 11 — SEM PENDRIVE?\n\n' +
-      'Isto vai: (1) criar a entrada "SYSFORGE" no menu do GRUB (carrega o instalador da ISO direto para a RAM via wimboot); ' +
-      '(2) definir o próximo boot nela (one-shot); (3) ' + (mode === 'reboot' ? 'reiniciar' : 'desligar') + '.\n' +
-      'Reversível: a entrada GRUB pode ser removida depois; BootOrder intocado.\n\nProsseguir?',
-    )) return;
-    setDiskBusy(true);
-    try {
+      if (!window.confirm(
+        `${verb} e entrar DIRETO no instalador do Windows 11?\n\n` +
+        `Método detectado: ${useUsb ? `pendrive Ventoy (${usb} — BootNext one-shot)` : 'SEM PENDRIVE — GRUB carrega o instalador da ISO direto para a RAM (wimboot)'}.\n` +
+        'O BootOrder fica INTACTO — se algo falhar, o boot volta ao normal sozinho.\n\nProsseguir?',
+      )) return;
+
+      setAction({ kind: 'working', msg: 'Solicitando privilégio (o polkit pode pedir sua senha na tela)…' });
       await backend('ensure_system_daemon', {});
-      setAction({ kind: 'working', msg: 'Preparando entrada GRUB + wimboot…' });
-      const prep = await daemonCall('v1.install.disk_prepare', { confirm: true });
-      setAction({ kind: 'ok', msg: `GRUB pronto (ISO: ${prep['iso_path'] ?? '—'}${prep['wimboot_downloaded'] ? ' · wimboot baixado da fonte oficial iPXE' : ''})` });
-      await daemonCall('v1.install.disk_arm', { confirm: true });
-      setAction({ kind: 'ok', msg: 'Próximo boot: DIRETO no instalador (grub-reboot one-shot)' });
+
+      if (useUsb && usb) {
+        setAction({ kind: 'working', msg: `Armando BootNext → ${usb} (one-shot)…` });
+        const r = await daemonCall('v1.boot.set_next', { entry_id: usb, confirm: true });
+        const snap = typeof r['snapshot_path'] === 'string' ? ` · snapshot: ${r['snapshot_path']}` : '';
+        setAction({ kind: 'ok', msg: `BootNext armado → ${usb}${snap}` });
+      } else {
+        setAction({ kind: 'working', msg: 'Preparando GRUB + wimboot (método sem pendrive)…' });
+        const prep = await daemonCall('v1.install.disk_prepare', { confirm: true });
+        await daemonCall('v1.install.disk_arm', { confirm: true });
+        setAction({
+          kind: 'ok',
+          msg: `GRUB pronto (ISO: ${prep['iso_path'] ?? '—'}) · próximo boot: DIRETO no instalador (one-shot)`,
+        });
+      }
       setCd({ mode, secs: 5 });
     } catch (e) {
       setAction({ kind: 'err', error: toBackendError(e) });
-    } finally {
-      setDiskBusy(false);
     }
   }
 
@@ -239,27 +246,24 @@ export default function WindowsPage() {
                 </span>
               </div>
             </div>
+            <p className="foot-note">
+              Método que será usado:{' '}
+              {ventoyReady && usbEntry ? (
+                <Badge kind="ok">pendrive Ventoy ({usbEntry}) — BootNext</Badge>
+              ) : disk?.ready ? (
+                <Badge kind="ok">sem pendrive — Disco + Nuvem (GRUB/wimboot na RAM)</Badge>
+              ) : (
+                <Badge kind="warn">sondando… (ISO/pendrive/máquina)</Badge>
+              )}
+            </p>
             <div className="btn-row">
-              <button
-                className="btn-primary"
-                disabled={!ventoyReady || !hasIso}
-                onClick={() => launchInstaller('reboot')}
-              >
-                ⚡ Reiniciar agora → instalador
+              <button className="btn-primary" onClick={() => launchInstaller('reboot')}>
+                ⚡ Reiniciar e instalar agora
               </button>
-              <button
-                className="btn-off"
-                disabled={!ventoyReady || !hasIso}
-                onClick={() => launchInstaller('poweroff')}
-              >
+              <button className="btn-off" onClick={() => launchInstaller('poweroff')}>
                 ⏻ Desligar (ao ligar, instala)
               </button>
             </div>
-            {(!ventoyReady || !hasIso) && (
-              <p className="foot-note">
-                Os botões ativam quando o pendrive Ventoy estiver conectado e a ISO estiver em ~/Downloads.
-              </p>
-            )}
             {action.kind === 'working' && <p className="action working">⠿ {action.msg}</p>}
             {action.kind === 'ok' && <p className="action ok">✔ {action.msg}</p>}
             {action.kind === 'err' && (
@@ -372,18 +376,10 @@ export default function WindowsPage() {
                 <div className="kv"><span className="kv-k">GRUB</span><span className="kv-v">{disk.grub_present ? <Badge kind="ok">presente</Badge> : <Badge kind="err">ausente</Badge>}</span></div>
                 <div className="kv"><span className="kv-k">RAM livre</span><span className="kv-v">{disk.ram_ok ? <Badge kind="ok">{disk.ram_available_mb} MiB (precisa {disk.ram_needed_mb})</Badge> : <Badge kind="err">{`${disk.ram_available_mb} MiB < ${disk.ram_needed_mb} MiB`}</Badge>}</span></div>
                 <div className="kv"><span className="kv-k">wimboot</span><span className="kv-v">{disk.wimboot_present ? <Badge kind="ok">instalado</Badge> : <Badge kind="info">será baixado (iPXE oficial) na preparação</Badge>}</span></div>
-                <div className="btn-row">
-                  <button className="btn-primary" disabled={!disk.ready || diskBusy} onClick={() => launchDiskInstaller('reboot')}>
-                    ⚡ Sem pendrive: preparar e reiniciar
-                  </button>
-                  <button className="btn-off" disabled={!disk.ready || diskBusy} onClick={() => launchDiskInstaller('poweroff')}>
-                    ⏻ Preparar e desligar (ao ligar, instala)
-                  </button>
-                </div>
-                {!disk.ready && (
-                  <p className="foot-note">
-                    Pendências: {disk.blockers.join(' · ')}
-                  </p>
+                    {disk.ready ? (
+                  <p className="action ok">✔ pronto — os botões de cima usam este método sozinho</p>
+                ) : (
+                  <p className="action err">✖ pendências: {disk.blockers.join(' · ')}</p>
                 )}
               </>
             )}

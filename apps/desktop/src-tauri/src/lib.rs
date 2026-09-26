@@ -244,6 +244,14 @@ fn backup_run(dirs: Vec<String>, target: String) -> Result<Value, Value> {
     sysforge_core::backup::run(&exec, &dirs, &target).map_err(wire_err)
 }
 
+#[tauri::command]
+fn get_disk_readiness() -> Result<Value, Value> {
+    // In-process, SEM daemon: sondagem é leitura pura (ISO/SecureBoot/GRUB/RAM)
+    // — sempre fresca, zero fricção. Preparo/ARM continuam no daemon (privilegiados).
+    let r = sysforge_core::windows::diskboot::readiness();
+    Ok(serde_json::to_value(r).unwrap_or(Value::Null))
+}
+
 /// Garante que exista um agente de diálogo polkit para a sessão do app.
 /// Sem ele, pedidos de autorização do daemon morrem em silêncio
 /// (pkcheck fica esperando um diálogo que ninguém mostra — bug real
@@ -299,7 +307,8 @@ pub fn run() {
             get_network_info,
             backup_state,
             backup_estimate,
-            backup_run
+            backup_run,
+            get_disk_readiness
         ])
         .run(tauri::generate_context!())
         .expect("falha ao iniciar o SYSFORGE");
