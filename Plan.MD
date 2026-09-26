@@ -15,7 +15,7 @@
 
 **[S1-S3 · fase fundação, resumidas]**
 1. «continue de onde parou»
-2. «continue, lance esse projeto no meu GITHUB em REPOSITÓRIO PRIVADO, CHAVE para fazer autenticação se PRECISAR: (ghp_✂ TOKEN REVOGADO PELO DONO — nunca armazenado aqui)»
+2. «continue, lance esse projeto no meu GITHUB em REPOSITÓRIO PRIVADO, CHAVE para fazer autenticação se PRECISAR: (token colado no chat — REVOGADO pelo dono em seguida; jamais armazenado neste arquivo)»
 3. «continue, até eu conseguir utilizar sem Erros e Ser totalmente Funcional. O meu Objetivo é mudar para o Windows 11 […] implemente tudo que for preciso e continue até conseguir com que o app, desligue o computador e entre na bios e instalar o sistema operacional que o usuario quer.»
 4. «continue até acabar» · «Pronto Deletei o Token, Agora continue até terminar e me diga a proxima etapa»
 
