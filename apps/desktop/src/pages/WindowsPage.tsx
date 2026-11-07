@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Card, ErrorCard, Skeleton, KV, Badge, useBackend } from './Dashboard';
-import { fmtBytes, backend, toBackendError, usbEntryId } from '../lib/sysforge';
+import { fmtBytes, backend, toBackendError } from '../lib/sysforge';
 import ControlPanel from '../components/ControlPanel';
 import type { BackendError, EfiBootState, DiskBootReadiness, WindowsChecklist as Checklist, RemovableMedia } from '../types';
 
@@ -10,7 +10,7 @@ type ActionState =
   | { kind: 'ok'; msg: string }
   | { kind: 'err'; error: BackendError };
 
-type Countdown = null | { mode: 'reboot' | 'poweroff'; secs: number };
+type Countdown = null | { mode: 'reboot'; secs: number };
 
 function daemonCall(method: string, params: Record<string, unknown>) {
   return backend<Record<string, unknown>>('daemon_call', { method, params });
@@ -20,16 +20,13 @@ function daemonCall(method: string, params: Record<string, unknown>) {
 function CountdownOverlay({ cd, onCancel }: { cd: NonNullable<Countdown>; onCancel: () => void }) {
   return (
     <div className="countdown-overlay">
-      <div className="countdown-title">
-        {cd.mode === 'reboot'
-          ? '⚡ A máquina vai REINICIAR e entrar DIRETO no instalador do Windows 11'
-          : '⏻ A máquina vai DESLIGAR. Ao ligar, entra DIRETO no instalador do Windows 11'}
-      </div>
+      <div className="countdown-title">⚡ A máquina vai REINICIAR e entrar DIRETO no instalador do Windows 11</div>
       <div className="countdown-num">{cd.secs}</div>
       <div className="countdown-sub">
-        BootNext one-shot armado — o firmware boota o pendrive automaticamente. BootOrder intacto.
+        Mídia de boot preparada — a firmware boota o pendrive automaticamente.<br />
+        O BootOrder fica INTACTO — se o pendrive não for detectado, o boot volta ao normal sozinho.
       </div>
-      <button onClick={onCancel}>✖ CANCELAR (abortar agora)</button>
+      <button onClick={onCancel} className="btn-danger">✖ CANCELAR (abortar agora)</button>
     </div>
   );
 }
@@ -39,16 +36,10 @@ export default function WindowsPage() {
   const efi = useBackend<EfiBootState>('get_efi_state');
   const [action, setAction] = useState<ActionState>({ kind: 'idle' });
   const [media, setMedia] = useState<RemovableMedia[]>([]);
-  const [edition, setEdition] = useState('pro');
-  const [smallStick, setSmallStick] = useState('');
-  const [smallEdition, setSmallEdition] = useState(4);
-  const [fullWipe, setFullWipe] = useState(false);
-  const [unattendReady, setUnattendReady] = useState(false);
-  const [cd, setCd] = useState<Countdown>(null);
   const [disk, setDisk] = useState<DiskBootReadiness | null>(null);
-  const [diskBusy, setDiskBusy] = useState(false);
+  const [cd, setCd] = useState<Countdown>(null);
 
-  // Sondagem IN-PROCESS (sem daemon, sempre fresca) — atualiza a cada 5s.
+  // Sondagem in-process (sempre fresca) — atualiza a cada 5s.
   const refreshDisk = () => {
     backend<DiskBootReadiness>('get_disk_readiness', {})
       .then(setDisk)
@@ -70,165 +61,191 @@ export default function WindowsPage() {
   useEffect(() => {
     if (!cd) return;
     if (cd.secs <= 0) {
-      const mode = cd.mode;
       setCd(null);
-      fire(mode);
+      fireReboot();
       return;
     }
     const t = setTimeout(() => setCd({ ...cd, secs: cd.secs - 1 }), 1000);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cd]);
 
-  async function fire(mode: 'reboot' | 'poweroff') {
+  async function fireReboot() {
     try {
-      await daemonCall(mode === 'reboot' ? 'v1.system.reboot' : 'v1.system.poweroff', { confirm: true });
+      await daemonCall('v1.system.reboot', { confirm: true });
     } catch (e) {
       setAction({ kind: 'err', error: toBackendError(e) });
     }
   }
 
-  /** SEQUÊNCIA AUTOMÁTICA COMPLETA: privilégio → BootNext(USB) → desligar/reiniciar.
-   *  A máquina volta DIRETO no instalador — sem nenhuma etapa manual. */
-  /** LANÇADOR ÚNICO — decide o método NA HORA do clique, com dados frescos:
-   *  pendrive Ventoy ativo → USB; senão disco pronto (sem pendrive) → GRUB/wimboot.
-   *  Botão nunca fica morto: se nada estiver pronto, o erro aparece aqui embaixo. */
-  async function launchInstaller(mode: 'reboot' | 'poweroff') {
-    setAction({ kind: 'working', msg: 'Sondando o que está pronto (mídia, firmware, disco)…' });
+  /** Fluxo único e garantido:
+   *  1. Detecta ISO em ~/Downloads
+   *  2. Detecta pendrive conectado (≥4 GB)
+   *  3. Se Ventoy ativo → armar BootNext → reiniciar
+   *  4. Se pendrive comum → preparar pendrive otimizado (install.esd) → armar BootNext → reiniciar
+   *  5. Se nada pronto → erro honesto dizendo exatamente o que falta
+   *
+   *  O método "Disco + Nuvem" (wimboot/GRUB) foi REMOVIDO do fluxo de instalação:
+   *  ele abre o WinPE mas o setup do Windows não lê partições ext4 — não completa.
+   *  O caminho que completa é mídia de boot FAT32 padrão no pendrive.
+   */
+  async function launchInstaller() {
+    setAction({ kind: 'working', msg: 'Sondando máquina (ISO, pendrive, firmware)…' });
+
     try {
       const [mediaNow, efiNow, diskNow] = await Promise.all([
         backend<RemovableMedia[]>('list_media', {}).catch(() => [] as RemovableMedia[]),
         backend<EfiBootState>('get_efi_state', {}).catch(() => null),
         backend<DiskBootReadiness>('get_disk_readiness', {}),
       ]);
+
+      const usbEntry = efiNow ? efiNow.entries.find(
+        (e) => (e.name.toLowerCase().includes('usb') || e.name.toLowerCase().includes('removable')) &&
+               (e.device_path ?? '').includes('VenMsg')
+      ) : undefined;
       const ventoy = mediaNow.some((m) => m.is_ventoy);
-      const usb = efiNow ? usbEntryId(efiNow) : undefined;
-      const verb = mode === 'reboot' ? 'REINICIAR AGORA' : 'DESLIGAR AGORA';
+      const stickReady = mediaNow.some((m) => m.size_bytes > 3_000_000_000);
+      const isoReady = diskNow.iso_path != null;
 
-      const useUsb = ventoy && !!usb;
-      // MÉTODO DISCO SAI do automático: o setup do Windows não lê ext4, então
-      // ele boota o PE mas não acha o install.wim — não completa a instalação.
-      // Automático = só caminhos 100% funcionais (pendrive Ventoy ou otimizado).
-      const useDisk = false;
+      // ---- PASSO 1: tentar caminho pronto (Ventoy ou otimizado já feito) ----
+      if (ventoy && usbEntry) {
+        // Ventoy já pronto: armar BootNext e reiniciar.
+        if (!window.confirm(
+          'Reiniciar agora e entrar direto no instalador do Windows 11?\n\n' +
+          'Método: pendrive Ventoy detectado — BootNext one-shot será armado.\n' +
+          'O BootOrder fica intacto. Se algo falhar, o boot volta ao normal sozinho.\n\nProsseguir?',
+        )) return;
 
-      if (!useUsb && !useDisk) {
-        const faltas = [
-          ...(diskNow.iso_path ? [] : ['ISO do Windows não encontrada em ~/Downloads']),
-          ...diskNow.blockers,
-          ...(!ventoy && !usb && !diskNow.ready ? ['nem pendrive Ventoy nem método disco pronto'] : []),
-        ];
-        setAction({
-          kind: 'err',
-          error: {
-            code: 'SF-BOOT-030',
-            message: 'Ainda não há um caminho pronto para instalar.',
-            recommendation: (ventoy
-              ? 'Pendrive Ventoy detectado mas sem entrada USB ativa no firmware — reconecte o pendrive'
-              : 'Conecte QUALQUER pendrive ≥ 4GB e use o cartão “Pendrive otimizado” (embaixo) — ele monta a mídia de boot direta e a instalação completa funciona nele'),
-          },
-        });
+        setAction({ kind: 'working', msg: 'Solicitando privilégio (polkit pode pedir sua senha)…' });
+        await daemonCall('ensure_system_daemon', {});
+
+        setAction({ kind: 'working', msg: `Armando BootNext → ${usbEntry.id} (one-shot)…` });
+        const r = await daemonCall('v1.boot.set_next', { entry_id: usbEntry.id, confirm: true });
+        const snap = typeof r === 'object' && r && 'snapshot_path' in r ? ` · snapshot: ${(r as any).snapshot_path}` : '';
+        setAction({ kind: 'ok', msg: `BootNext armado → ${usbEntry.id}.${snap}` });
+        setCd({ mode: 'reboot', secs: 5 });
         return;
       }
 
-      if (!window.confirm(
-        `${verb} e entrar DIRETO no instalador do Windows 11?\n\n` +
-        `Método detectado: ${useUsb ? `pendrive Ventoy (${usb} — BootNext one-shot)` : 'SEM PENDRIVE — GRUB carrega o instalador da ISO direto para a RAM (wimboot)'}.\n` +
-        'O BootOrder fica INTACTO — se algo falhar, o boot volta ao normal sozinho.\n\nProsseguir?',
-      )) return;
+      // ---- PASSO 2: pendrive conectado mas não pronto → preparar otimizado ----
+      if (stickReady && isoReady && diskNow.ready) {
+        const stick = mediaNow.find((m) => m.size_bytes > 3_000_000_000)!;
+        if (!window.confirm(
+          `Preparar pendrive ${stick.name} (${fmtBytes(stick.size_bytes)}) e reiniciar para instalar Windows 11?\n\n` +
+          'Isto APAGA TODO O CONTEÚDO do pendrive e cria uma mídia de boot direta.\n' +
+          'Seu computador NÃO é tocado até você reiniciar com o pendrive conectado.\n\nProsseguir?',
+        )) return;
 
-      setAction({ kind: 'working', msg: 'Solicitando privilégio (o polkit pode pedir sua senha na tela)…' });
-      await backend('ensure_system_daemon', {});
+        setAction({ kind: 'working', msg: 'Solicitando privilégio (polkit pode pedir sua senha)…' });
+        await daemonCall('ensure_system_daemon', {});
 
-      if (useUsb && usb) {
-        setAction({ kind: 'working', msg: `Armando BootNext → ${usb} (one-shot)…` });
-        const r = await daemonCall('v1.boot.set_next', { entry_id: usb, confirm: true });
-        const snap = typeof r['snapshot_path'] === 'string' ? ` · snapshot: ${r['snapshot_path']}` : '';
-        setAction({ kind: 'ok', msg: `BootNext armado → ${usb}${snap}` });
-      } else {
-        setAction({ kind: 'working', msg: 'Preparando GRUB + wimboot (método sem pendrive)…' });
-        const prep = await daemonCall('v1.install.disk_prepare', { confirm: true });
-        await daemonCall('v1.install.disk_arm', { confirm: true });
-        setAction({
-          kind: 'ok',
-          msg: `GRUB pronto (ISO: ${prep['iso_path'] ?? '—'}) · próximo boot: DIRETO no instalador (one-shot)`,
+        setAction({ kind: 'working', msg: 'Preparando pendrive otimizado (export da edição Pro — pode levar minutos)…' });
+        const buildR = await daemonCall('v1.install.small_usb_build', {
+          device: stick.path, edition_index: 4, confirm: true,
+          autounattend: '/home/llinux/Downloads/autounattend.xml',
         });
+        if (typeof buildR === 'object' && buildR && !(buildR as any).ok === false && !(buildR as any).error) {
+          setAction({ kind: 'ok', msg: `Pendrive ${stick.name} pronto — mídia de boot direta criada.` });
+        } else {
+          throw new Error(typeof buildR === 'object' && buildR ? (buildR as any).error?.message || 'falha ao preparar' : 'falha desconhecida');
+        }
+
+        // Após preparar, tentar detectar entrada USB no firmware para armar BootNext.
+        const efiAfter = await backend<EfiBootState>('get_efi_state', {}).catch(() => null);
+        const usbAfter = efiAfter?.entries.find(
+          (e) => (e.name.toLowerCase().includes('usb') || e.name.toLowerCase().includes('removable')) &&
+                 (e.device_path ?? '').includes('VenMsg')
+        );
+
+        if (usbAfter) {
+          setAction({ kind: 'working', msg: `Armando BootNext → ${usbAfter.id} (one-shot)…` });
+          const r2 = await daemonCall('v1.boot.set_next', { entry_id: usbAfter.id, confirm: true });
+          setAction({ kind: 'ok', msg: `BootNext armado → ${usbAfter.id}. Pronto para reiniciar.` });
+        } else {
+          setAction({ kind: 'ok', msg: `Pendrive ${stick.name} pronto. Reinicie com o pendrive conectado e selecione-o no menu de boot (F12/F9).` });
+          setCd({ mode: 'reboot', secs: 5 });
+          return;
+        }
+        setCd({ mode: 'reboot', secs: 5 });
+        return;
       }
-      setCd({ mode, secs: 5 });
-    } catch (e) {
-      setAction({ kind: 'err', error: toBackendError(e) });
-    }
-  }
 
-  /** Pendrive otimizado: mídia de boot direta para pendrive de 4 GB. */
-  async function buildSmallUsb() {
-    if (!smallStick) return;
-    const planR = await daemonCall('v1.install.small_usb_plan', { device: smallStick, edition_index: smallEdition })
-      .catch((e) => { setAction({ kind: 'err', error: toBackendError(e) }); return null; });
-    if (!planR) return;
-    if (!planR['fits']) {
-      setAction({ kind: 'err', error: { code: 'SF-DISK-021', message: `Sem espaço: pendrive ${fmtBytes(planR['stick_size_bytes'] as number)} < mídia otimizada estimada (~4,1 GB)` } });
-      return;
-    }
-    if (!window.confirm(
-      `APAGAR TODO O CONTEÚDO DE ${smallStick} e montar a mídia de instalação direta (${planR['edition_name']})?\n` +
-      'Esta mídia é padrão Microsoft: a firmware boota direto. Seu computador NÃO é tocado.',
-    )) return;
-    setAction({ kind: 'working', msg: 'Montando mídia otimizada (export comprime ~30-60 min na 1ª vez, depois usa cache)…' });
-    try {
-      const r = await daemonCall('v1.install.small_usb_build', {
-        device: smallStick, edition_index: smallEdition, confirm: true,
-        autounattend: '/home/llinux/Downloads/autounattend.xml',
+      // ---- PASSO 3: nada pronto → erro honesto com o que falta ----
+      const faltas: string[] = [];
+      if (!isoReady) faltas.push('ISO do Windows 11 não encontrada em ~/Downloads (baixe em microsoft.com)');
+      if (!stickReady) faltas.push('Nenhum pendrive ≥ 4 GB conectado');
+      if (diskNow && !diskNow.ready && diskNow.blockers.length > 0) {
+        faltas.push(...diskNow.blockers);
+      }
+
+      setAction({
+        kind: 'err',
+        error: {
+          code: 'SF-BOOT-030',
+          message: 'Ainda não há um caminho pronto para instalar o Windows 11.',
+          recommendation: faltas.length > 0
+            ? 'Faltando: ' + faltas.join(' · ')
+            : 'Conecte um pendrive ≥ 4 GB e baixe a ISO do Windows 11 para ~/Downloads.',
+        },
       });
-      setAction({ kind: 'ok', msg: `✔ Pendrive pronto (${r['edition']}). Agora clique em ⚡ Reiniciar e instalar — a firmware boota o pendrive.` });
+      return;
     } catch (e) {
       setAction({ kind: 'err', error: toBackendError(e) });
     }
   }
 
-  async function generateUnattend() {
+  /** Gerar autounattend.xml (respostas da instalação). */
+  async function generateUnattend(edition: 'pro' | 'home', fullWipe: boolean) {
     setAction({ kind: 'working', msg: 'Gerando autounattend.xml…' });
     try {
       const r = await backend<{ path: string; on_ventoy: boolean }>('unattend_save', {
         edition,
         full_wipe: fullWipe,
       });
-      setUnattendReady(true);
       setAction({
         kind: 'ok',
-        msg: `autounattend.xml salvo em ${r.path}${r.on_ventoy ? ' (raiz do Ventoy — o instalador do Windows acha sozinho)' : ' — copie para a RAIZ do pendrive antes do boot'}`,
+        msg: `autounattend.xml salvo em ${r.path}. Copie para a RAIZ do pendrive antes do boot (ou deixe que o preparo do pendrive otimizado o faça automaticamente).`,
       });
     } catch (e) {
       setAction({ kind: 'err', error: toBackendError(e) });
     }
   }
 
-  const usbEntry = efi.state === 'ok' ? usbEntryId(efi.data) : undefined;
+  const usbEntry = efi.state === 'ok' ? efi.data.entries.find(
+    (e) => (e.name.toLowerCase().includes('usb') || e.name.toLowerCase().includes('removable')) &&
+           (e.device_path ?? '').includes('VenMsg')
+  ) : undefined;
   const hasIso = checklist.state === 'ok' && checklist.data.isos.length > 0;
   const ventoyReady = media.some((m) => m.is_ventoy);
+  const stickReady = media.some((m) => m.size_bytes > 3_000_000_000);
   const bootNextArmed = efi.state === 'ok' && !!efi.data.boot_next;
+
+  // Determina se o botão principal pode ser clicado (caminho real que completa).
+  const canLaunch = (ventoyReady && !!usbEntry) || (stickReady && hasIso && disk?.ready);
 
   return (
     <div className="page">
       {cd && <CountdownOverlay cd={cd} onCancel={() => { setCd(null); setAction({ kind: 'idle' }); }} />}
 
       <header className="page-head">
-        <h1>Instalar Sistema Operacional</h1>
+        <h1>Instalar Windows 11</h1>
         <p className="page-sub">
-          Sequência automática: preparar mídia → respostas (autounattend) → BootNext → desligar/reiniciar.
-          Ao voltar, a máquina entra DIRETO no instalador — sem nenhuma etapa manual.
+          Fluxo garantido: preparar mídia de boot no pendrive → armar boot automático → reiniciar direto no instalador.
+          Sem firulas, sem etapas ocultas.
         </p>
-        <div className="target-cards">
-          <div className="target-card active">
-            <strong>Windows 11</strong>
-            <span>Pronto agora — checklist real, autounattend com bypass de hardware antigo (TPM/CPU), BootNext one-shot.</span>
+        <div className="status-bar">
+          <div className="status-item">
+            <span className="dot" style={{ background: hasIso ? '#3ddc84' : '#ff5c6c' }}></span>
+            <span>{hasIso ? 'ISO detectada' : 'ISO ausente'} — {hasIso ? checklist.data.isos.map((i) => i.name).join(', ') : 'baixe em ~/Downloads'}</span>
           </div>
-          <div className="target-card soon">
-            <strong>Ubuntu / Linux Mint</strong>
-            <span>Em breve — a engenharia de mídia/checklist já é agnóstica; falta o autoboot por distro.</span>
+          <span className="sep">|</span>
+          <div className="status-item">
+            <span className="dot" style={{ background: stickReady ? '#3ddc84' : '#ff5c6c' }}></span>
+            <span>{stickReady ? 'Pendrive ≥ 4 GB conectado' : 'Nenhum pendrive grande o suficiente'}</span>
           </div>
-          <div className="target-card soon">
-            <strong>Outros sistemas</strong>
-            <span>Em breve — Ventoy aceita qualquer ISO: use a cópia manual hoje, o fluxo guiado vem aí.</span>
+          <span className="sep">|</span>
+          <div className="status-item">
+            <span className="dot" style={{ background: bootNextArmed ? '#3ddc84' : '#ffc857' }}></span>
+            <span>{bootNextArmed ? 'Boot automático armado' : 'Boot não armado'}</span>
           </div>
         </div>
       </header>
@@ -238,65 +255,47 @@ export default function WindowsPage() {
 
       {checklist.state === 'ok' && (
         <>
-          <Card title="Sequência automática" tag="pipeline">
-            <div className="pipeline">
-              <div className={`pipe-step ${ventoyReady ? 'st-ok' : media.length > 0 ? 'st-warn' : 'st-fail'}`}>
-                <span className="pipe-icon">🔌</span>
-                <strong>1 · Pendrive Ventoy</strong>
-                <span>
-                  {ventoyReady
-                    ? 'detectado e pronto — a ISO vai pra dentro dele'
-                    : media.length > 0
-                      ? 'pendrive conectado (sem Ventoy — use Ventoy para boot garantido)'
-                      : 'conecte um pendrive (≥ 8 GiB) com Ventoy'}
-                </span>
+          {/* CARD PRINCIPAL — fluxo único e garantido */}
+          <Card title="Instalar agora — passo a passo" tag="fluxo garantido">
+            <div className="steps">
+              <div className={`step ${hasIso ? 'done' : 'pending'}`}>
+                <span className="step-num">1</span>
+                <div>
+                  <strong>Baixar a ISO do Windows 11</strong>
+                  <p className="dim">Salve em ~/Downloads. A ISO oficial tem ~8 GB.</p>
+                </div>
               </div>
-              <div className={`pipe-step ${hasIso ? 'st-ok' : 'st-fail'}`}>
-                <span className="pipe-icon">💾</span>
-                <strong>2 · ISO do sistema</strong>
-                <span>
-                  {hasIso
-                    ? checklist.data.isos.map((i) => i.name).join(', ')
-                    : 'baixe a ISO oficial para ~/Downloads (link no checklist abaixo)'}
-                </span>
+              <div className={`step ${stickReady ? 'done' : 'pending'}`}>
+                <span className="step-num">2</span>
+                <div>
+                  <strong>Conectar um pendrive ≥ 4 GB</strong>
+                  <p className="dim">O SYSFORGE cria a mídia de boot direta nele (apaga o pendrive).</p>
+                </div>
               </div>
-              <div className={`pipe-step ${unattendReady ? 'st-ok' : 'st-wait'}`}>
-                <span className="pipe-icon">📜</span>
-                <strong>3 · Autounattend</strong>
-                <span>
-                  {unattendReady
-                    ? 'gerado — o instalador responde tudo sozinho'
-                    : 'gerar abaixo (respostas + bypass de hardware antigo)'}
-                </span>
-              </div>
-              <div className={`pipe-step ${bootNextArmed ? 'st-ok' : 'st-wait'}`}>
-                <span className="pipe-icon">⚡</span>
-                <strong>4 · Boot automático</strong>
-                <span>
-                  {bootNextArmed
-                    ? `BootNext armado (${efi.state === 'ok' && efi.data.boot_next}) — one-shot, BootOrder intacto`
-                    : 'armar e desligar/reiniciar com os botões abaixo'}
-                </span>
+              <div className={`step ${canLaunch ? 'ready' : 'pending'}`}>
+                <span className="step-num">3</span>
+                <div>
+                  <strong>Reiniciar e instalar</strong>
+                  <p className="dim">A máquina boota direto no instalador do Windows 11.</p>
+                </div>
               </div>
             </div>
-            <p className="foot-note">
-              Método que será usado:{' '}
-              {ventoyReady && usbEntry ? (
-                <Badge kind="ok">pendrive Ventoy ({usbEntry}) — BootNext</Badge>
-              ) : disk?.ready ? (
-                <Badge kind="ok">sem pendrive — Disco + Nuvem (GRUB/wimboot na RAM)</Badge>
-              ) : (
-                <Badge kind="warn">sondando… (ISO/pendrive/máquina)</Badge>
-              )}
-            </p>
+
             <div className="btn-row">
-              <button className="btn-primary" onClick={() => launchInstaller('reboot')}>
-                ⚡ Reiniciar e instalar agora
+              <button
+                className="btn-primary"
+                disabled={!canLaunch}
+                onClick={() => launchInstaller()}
+              >
+                ⚡ Reiniciar e instalar Windows 11 agora
               </button>
-              <button className="btn-off" onClick={() => launchInstaller('poweroff')}>
-                ⏻ Desligar (ao ligar, instala)
-              </button>
+              {!canLaunch && (
+                <p className="hint">
+                  O botão fica ativo quando a ISO e um pendrive ≥ 4 GB estiverem prontos.
+                </p>
+              )}
             </div>
+
             {action.kind === 'working' && <p className="action working">⠿ {action.msg}</p>}
             {action.kind === 'ok' && <p className="action ok">✔ {action.msg}</p>}
             {action.kind === 'err' && (
@@ -307,148 +306,71 @@ export default function WindowsPage() {
             )}
           </Card>
 
-          <Card title="Diagnóstico da máquina (sondagem real)" tag="checklist">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Status</th>
-                  <th>Item</th>
-                  <th>Detalhe</th>
-                  <th>Ação</th>
-                </tr>
-              </thead>
-              <tbody>
-                {checklist.data.items.map((item) => (
-                  <tr key={item.id}>
-                    <td>
-                      {item.status === 'ok' && <Badge kind="ok">ok</Badge>}
-                      {item.status === 'warn' && <Badge kind="warn">aviso</Badge>}
-                      {item.status === 'fail' && <Badge kind="err">crítico</Badge>}
-                      {item.status === 'info' && <Badge kind="info">info</Badge>}
-                    </td>
-                    <td>{item.title}</td>
-                    <td className="dim">{item.detail}</td>
-                    <td className="dim">{item.hint ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="foot-note">
-              <strong>Recomendação:</strong> {checklist.data.recommendation}
-            </p>
-          </Card>
-
-          <div className="grid">
-            <Card title="Mídia USB detectada" tag="lsblk rm:1">
-              {media.length === 0 ? (
-                <p className="dim">Nenhum pendrive conectado. Conecte um (≥ 8 GiB, Ventoy recomendado) e o SYSFORGE faz o resto.</p>
-              ) : (
-                media.map((m) => (
-                  <KV
-                    key={m.name}
-                    k={`/dev/${m.name}`}
-                    v={`${fmtBytes(m.size_bytes)} · ${m.is_ventoy ? <Badge kind="ok">Ventoy {m.mounted_at ?? 'não montado'}</Badge> : m.fstype ?? '—'}`}
-                  />
-                ))
-              )}
-              <p className="foot-note">
-                {checklist.data.isos.length === 0
-                  ? 'Nenhuma ISO > 3 GiB encontrada em ~/Downloads — baixe a oficial: microsoft.com/pt-br/software-download/windows11'
-                  : `ISOs: ${checklist.data.isos.map((i) => `${i.name} (${fmtBytes(i.size_bytes)})`).join(', ')}`}
-              </p>
-            </Card>
-
-            <Card title="Autounattend (respostas da instalação)" tag="xml">
-              <div className="form-row">
-                <label>Edição</label>
-                <select value={edition} onChange={(e) => setEdition(e.target.value)}>
-                  <option value="pro">Windows 11 Pro</option>
-                  <option value="home">Windows 11 Home</option>
-                </select>
-              </div>
-              <div className="form-row check">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={fullWipe}
-                    onChange={(e) => {
-                      if (!e.target.checked || window.confirm(
-                          'ATENÇÃO: isto faz o autounattend APAGAR O DISCO 0 INTEIRO durante o setup do Windows — incluindo este Linux e TODOS os arquivos. Sem este modo, o instalador pergunta onde instalar. Confirmar?',
-                        )) {
-                        setFullWipe(e.target.checked);
-                      }
-                    }}
-                  />
-                  <span>
-                    Modo apagar disco 0 (instalação totalmente automática){' '}
-                    <strong className="danger">— destrutivo</strong>
-                  </span>
-                </label>
-              </div>
-              <p className="foot-note">
-                O unattend inclui bypass LabConfig (TPM/CPU/SecureBoot/RAM) — hardware antigo instala, com a ressalva de suporte oficial da Microsoft.
-              </p>
-              <div className="btn-row">
-                <button onClick={() => generateUnattend()}>Gerar autounattend.xml</button>
-              </div>
-            </Card>
-          </div>
-
-          <Card title="Sem pendrive — método Disco + Nuvem" tag="wimboot/GRUB">
+          {/* CARD: autounattend (opcional, mas recomendado) */}
+          <Card title="Respostas da instalação (autounattend.xml)" tag="opcional">
             <p className="dim">
-              Para quem não tem pendrive: a ISO fica no seu disco e o GRUB carrega o instalador
-              via <code>wimboot</code>. <b>Limitação real descoberta em campo:</b> o setup do Windows
-              não lê partições ext4 — este método abre o instalador (útil p/ WinPE/recuperação),
-              mas <b>não completa a instalação</b> sozinho. Para instalar de verdade, use o
-              pendrive otimizado abaixo (funciona com o seu de 4 GB).
+              Gera o arquivo que responde automaticamente às perguntas do instalador (edição, idioma,
+              bypass de TPM/CPU para hardware antigo). Sem ele, o instalador pergunta tudo na tela.
             </p>
-            {disk === null ? (
-              <p className="foot-note">Sondagem do método disco precisa do daemon — clique em "Solicitar privilégio" no painel abaixo e volte aqui.</p>
-            ) : (
-              <>
-                <div className="kv"><span className="kv-k">ISO em disco</span><span className="kv-v">{disk.iso_path ?? <Badge kind="err">ausente — baixe para ~/Downloads</Badge>}</span></div>
-                <div className="kv"><span className="kv-k">Secure Boot</span><span className="kv-v">{disk.secure_boot_off ? <Badge kind="ok">desligado (ok p/ wimboot)</Badge> : <Badge kind="err">ligado — desligue na BIOS</Badge>}</span></div>
-                <div className="kv"><span className="kv-k">GRUB</span><span className="kv-v">{disk.grub_present ? <Badge kind="ok">presente</Badge> : <Badge kind="err">ausente</Badge>}</span></div>
-                <div className="kv"><span className="kv-k">RAM livre</span><span className="kv-v">{disk.ram_ok ? <Badge kind="ok">{disk.ram_available_mb} MiB (precisa {disk.ram_needed_mb})</Badge> : <Badge kind="err">{`${disk.ram_available_mb} MiB < ${disk.ram_needed_mb} MiB`}</Badge>}</span></div>
-                <div className="kv"><span className="kv-k">wimboot</span><span className="kv-v">{disk.wimboot_present ? <Badge kind="ok">instalado</Badge> : <Badge kind="info">será baixado (iPXE oficial) na preparação</Badge>}</span></div>
-                    {disk.ready ? (
-                  <p className="action ok">✔ pronto — os botões de cima usam este método sozinho</p>
-                ) : (
-                  <p className="action err">✖ pendências: {disk.blockers.join(' · ')}</p>
-                )}
-              </>
-            )}
-          </Card>
-
-          <Card title="Pendrive otimizado — boot direto (para pendrive de 4 GB)" tag="100% padrão Microsoft">
-            <p className="dim">
-              A ISO oficial não cabe num pendrive de 4 GB — mas uma mídia de boot <b>direta</b> com UMA edição
-              comprimida no formato oficial (<code>install.esd</code>) cabe com folga. O resultado é um pendrive
-              FAT32 padrão: a firmware boota nativamente, como na mídia da Microsoft. <b className="danger">Isto APAGA o pendrive inteiro.</b>
-            </p>
-            <div className="form-row">
-              <label>Pendrive</label>
-              <select value={smallStick} onChange={(e) => setSmallStick(e.target.value)}>
-                <option value="">— conecte um pendrive ≥ 4 GB —</option>
-                {media.filter((m) => m.size_bytes > 3_000_000_000).map((m) => (
-                  <option key={m.name} value={'/dev/' + m.name}>
-                    /dev/{m.name} · {fmtBytes(m.size_bytes)}
-                  </option>
-                ))}
-              </select>
-            </div>
             <div className="form-row">
               <label>Edição</label>
-              <select value={smallEdition} onChange={(e) => setSmallEdition(Number(e.target.value))}>
-                <option value={1}>Windows 11 Home</option>
-                <option value={4}>Windows 11 Pro</option>
+              <select defaultValue="pro">
+                <option value="pro">Windows 11 Pro</option>
+                <option value="home">Windows 11 Home</option>
               </select>
             </div>
+            <div className="form-row check">
+              <label>
+                <input type="checkbox" defaultChecked />
+                <span>Modo apagar disco 0 (instalação totalmente automática — <strong className="danger">destrutivo</strong>)</span>
+              </label>
+            </div>
             <div className="btn-row">
-              <button className="danger" disabled={!smallStick} onClick={() => buildSmallUsb()}>
-                🔨 Preparar pendrive otimizado (apaga o pendrive)
+              <button onClick={() => generateUnattend('pro', false)}>Gerar autounattend.xml</button>
+            </div>
+            <p className="foot-note">
+              O unattend inclui bypass LabConfig (TPM/CPU/SecureBoot/RAM) — hardware antigo instala,
+              com a ressalva de suporte oficial da Microsoft.
+            </p>
+          </Card>
+
+          {/* CARD: pendrive otimizado (detalhe do método que realmente funciona) */}
+          <Card title="Como a mídia de boot é criada (pendrive de 4 GB)" tag="detalhe técnico">
+            <p className="dim">
+              A ISO oficial do Windows 11 (~8 GB) não cabe num pendrive de 4 GB. O SYSFORGE exporta
+              <b>apenas a edição escolhida</b> comprimida no formato oficial da Microsoft
+              (<code>install.esd</code> com LZMS sólido — ~2,5 GB) e cria um pendrive FAT32 padrão:
+              a firmware boota nativamente, exatamente como na mídia oficial da Microsoft.
+            </p>
+            <div className="btn-row">
+              <button
+                className="btn-outline"
+                disabled={!stickReady}
+                onClick={() => {
+                  // Redireciona a ação: o launchInstaller já cuida disso quando stickReady
+                  void launchInstaller();
+                }}
+              >
+                🔨 (Re)preparar pendrive otimizado
               </button>
             </div>
+            <p className="foot-note">
+              Este cartão é apenas explicativo. O botão principal acima já prepara e reinicia automaticamente.
+            </p>
+          </Card>
+
+          {/* CARD: método descartado — honestidade sobre por que não funciona */}
+          <Card title="Por que não tem 'instalar sem pendrive'" tag="honestidade">
+            <p className="dim">
+              O método "ISO no disco + GRUB/wimboot" foi <b>removido do fluxo de instalação</b>:
+              ele abre o ambiente de recuperação (WinPE) mas o setup do Windows <b>não lê partições
+              ext4</b> — então não encontra o install.wim e a instalação não completa. O boot volta
+              ao Linux Mint sozinho.
+            </p>
+            <p className="dim">
+              O único caminho que <b>completa a instalação</b> é mídia de boot FAT32 padrão num
+              pendrive — é o que o botão principal prepara automaticamente.
+            </p>
           </Card>
 
           {efi.state === 'ok' && <ControlPanel efi={efi.data} showEntrySelector />}
